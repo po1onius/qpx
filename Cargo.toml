@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.14.2", features = [
+bevy = { version = "0.15", features = [
     "dynamic_linking",
     "bevy_dev_tools",
     "shader_format_spirv",
+    "wayland",
+    "jpeg"
 ] }
-bevy-inspector-egui = "0.27.0"
 bevy_single = "0.1.0"
-bevy_blendy_cameras = "0.5.1"
+bevy_image = "0.15"
 bevy_rapier3d = { version = "0.27.0", features = ["parallel", "simd-stable"] }
 avian2d = { version = "0.1.2", features = ["simd"] }
 serde = "1.0.214"

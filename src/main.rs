@@ -1,82 +1,60 @@
-use bevy::{prelude::*, sprite::Mesh2dHandle};
-use bevy_single::prelude::*;
+use bevy::prelude::*;
 
 fn main() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, role_move)
+        .add_systems(Update, (role_move, gravity))
         .run()
 }
 
 #[derive(Component)]
-struct RoleSpeed(f32);
+struct RoleSpeed(f32, f32);
 
 #[derive(Component)]
 struct Role;
 
 #[derive(Component)]
-struct TargetTransform(Transform);
+enum RoleState {
+    Air,
+    Floor,
+}
 
-fn setup(
-    mut cmd: Commands,
-    mut meshs: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    cmd.spawn(Camera2dBundle::default());
-    let mesh_handle = Mesh2dHandle(meshs.add(Circle::new(30.0)));
+fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
+    cmd.spawn(Camera2d::default());
     cmd.spawn((
-        mesh_handle,
-        materials.add(Color::srgba(0.2, 0.2, 0.2, 1.0)),
-        Transform::from_xyz(30.0, 30.0, 30.0),
-        GlobalTransform::default(),
-        Visibility::default(),
-        InheritedVisibility::default(),
-        ViewVisibility::default(),
-        Role,
-        TargetTransform(Transform::from_xyz(30.0, 30.0, 30.0)),
-        RoleSpeed(0.8),
+        Sprite::from_image(asset_server.load("branding/bevy_bird_dark.png")),
+        RoleState::Floor,
+        RoleSpeed(10.0, 0.0),
     ));
 }
 
-fn role_move(
-    window: Single<&Window>,
-    input: Res<ButtonInput<MouseButton>>,
-    camera: Single<(&Camera, &GlobalTransform)>,
-    mut comps: Query<(&mut Transform, &mut TargetTransform, &RoleSpeed), With<Role>>,
-) {
-    if input.just_pressed(MouseButton::Left) {
-        let (camera, camera_transform) = *camera;
-        if let Some(pos) = window
-            .cursor_position()
-            .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
-            .map(|ray| ray.origin.truncate())
-        {
-            for (_, mut t, _) in comps.iter_mut() {
-                t.0.translation.x = pos.x;
-                t.0.translation.y = pos.y;
-                break;
-            }
+fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState), With<RoleState>>) {
+    let delta = time.delta_secs();
+    let (mut speed, role_state) = rss.into_inner();
+    match role_state {
+        RoleState::Air => {
+            speed.1 -= GRAVITY * delta;
         }
-    }
-
-    for (mut r, t, spd) in comps.iter_mut() {
-        if *r != t.0 {
-            let x = t.0.translation.x - r.translation.x;
-            let y = t.0.translation.y - r.translation.y;
-            let v = (x * x + y * y).sqrt();
-            r.translation.x += spd.0 / v * x;
-            r.translation.y += spd.0 / v * y;
+        RoleState::Floor => {
+            speed.1 = 0.0;
         }
-        break;
     }
 }
 
-fn move_ins(
-    mut target_transform: Query<&mut TargetTransform, With<Role>>,
-    mouse_events: EventReader<CursorMoved>,
+fn collisions() {}
+
+const GRAVITY: f32 = 9.821 * 10.0;
+
+fn role_move(
+    input: Res<ButtonInput<KeyCode>>,
+    mut role: Single<(&mut Transform, &mut RoleSpeed), With<RoleSpeed>>,
+    time: Res<Time>,
+    mut camera_transform: Single<&mut Transform, (With<Camera>, Without<RoleSpeed>)>,
 ) {
-    let Ok(mut tt) = target_transform.get_single_mut() else {
-        return;
-    };
+    if input.just_pressed(KeyCode::Space) {}
+    let (mut role_transform, mut speed) = role.into_inner();
+    role_transform.translation.x += speed.0 * time.delta_secs();
+    role_transform.translation.y += speed.1 * time.delta_secs();
+    camera_transform.translation.x += speed.0 * time.delta_secs();
 }
