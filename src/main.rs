@@ -1,10 +1,20 @@
+use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 
 fn main() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, (role_move, loop_block, collision, gravity))
+        .add_systems(
+            Update,
+            (
+                jump.run_if(input_just_pressed(KeyCode::Space)),
+                role_move,
+                loop_block,
+                collision,
+                gravity,
+            ),
+        )
         .run()
 }
 
@@ -41,7 +51,7 @@ fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState), With<RoleState>>) {
+fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState)>) {
     let delta = time.delta_secs();
     let (mut speed, role_state) = rss.into_inner();
     match role_state {
@@ -49,14 +59,27 @@ fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState), With<RoleS
             speed.1 -= GRAVITY * delta;
         }
         RoleState::Floor => {
-            speed.1 = 0.0;
+            if speed.1 != 0.0 {
+                speed.1 = 0.0;
+            }
         }
+    }
+}
+
+fn jump(role_sv: Single<(&mut RoleSpeed, &RoleState)>) {
+    info!("pressed space");
+    let (mut role_speed, role_state) = role_sv.into_inner();
+    match role_state {
+        RoleState::Floor => {
+            role_speed.1 += 30000.0;
+        }
+        _ => (),
     }
 }
 
 fn collision(
     map_items: Query<&Transform, With<MapItem>>,
-    role: Single<(&Transform, &mut RoleState), With<RoleSpeed>>,
+    role: Single<(&Transform, &mut RoleState)>,
 ) {
     let (role_transform, mut role_state) = role.into_inner();
     for map_item_transform in map_items.iter() {
@@ -73,16 +96,15 @@ fn collision(
 const GRAVITY: f32 = 9.821 * 10.0;
 
 fn role_move(
-    input: Res<ButtonInput<KeyCode>>,
-    role: Single<(&mut Transform, &mut RoleSpeed), With<RoleSpeed>>,
+    role: Single<(&mut Transform, &RoleSpeed)>,
     time: Res<Time>,
     mut camera_transform: Single<
         &mut Transform,
         (With<Camera>, Without<RoleSpeed>, Without<MapItem>),
     >,
 ) {
-    if input.just_pressed(KeyCode::Space) {}
     let (mut role_transform, speed) = role.into_inner();
+    info!("{}", speed.1);
     role_transform.translation.x += speed.0 * time.delta_secs();
     role_transform.translation.y += speed.1 * time.delta_secs();
     camera_transform.translation.x += speed.0 * time.delta_secs();
