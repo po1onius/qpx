@@ -13,6 +13,7 @@ bevy = { version = "0.15", features = [
 ] }
 bevy_single = "0.1.0"
 bevy_image = "0.15"
+bevy_schedules_ext = "0.14.1"
 bevy_rapier3d = { version = "0.27.0", features = ["parallel", "simd-stable"] }
 avian2d = { version = "0.1.2", features = ["simd"] }
 serde = "1.0.214"

@@ -787,7 +787,7 @@ dependencies = [
  "bevy_math 0.15.0",
  "bevy_reflect 0.15.0",
  "bevy_render 0.15.0",
- "bevy_state",
+ "bevy_state 0.15.0",
  "bevy_text 0.15.0",
  "bevy_time 0.15.0",
  "bevy_transform 0.15.0",
@@ -1192,7 +1192,7 @@ dependencies = [
  "bevy_render 0.15.0",
  "bevy_scene 0.15.0",
  "bevy_sprite 0.15.0",
- "bevy_state",
+ "bevy_state 0.15.0",
  "bevy_tasks 0.15.0",
  "bevy_text 0.15.0",
  "bevy_time 0.15.0",
@@ -1670,6 +1670,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_schedules_ext"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af0a50e5a7b902ec093ac61e29b52e4ffa4171a543ab9632327cde5084835202"
+dependencies = [
+ "bevy_app 0.14.2",
+ "bevy_ecs 0.14.2",
+ "bevy_state 0.14.2",
+ "bevy_utils 0.14.2",
+]
+
+[[package]]
 name = "bevy_single"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1736,6 +1748,18 @@ dependencies = [
 
 [[package]]
 name = "bevy_state"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25335bfa58cc22371182335c3b133017293bc9b6d3308402fd4d1f978b83f937"
+dependencies = [
+ "bevy_app 0.14.2",
+ "bevy_ecs 0.14.2",
+ "bevy_state_macros 0.14.2",
+ "bevy_utils 0.14.2",
+]
+
+[[package]]
+name = "bevy_state"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "036ec832197eae51b8a842220d2df03591dff75b4566dcf0f81153bbcb2b593b"
@@ -1744,8 +1768,20 @@ dependencies = [
  "bevy_ecs 0.15.0",
  "bevy_hierarchy 0.15.0",
  "bevy_reflect 0.15.0",
- "bevy_state_macros",
+ "bevy_state_macros 0.15.0",
  "bevy_utils 0.15.0",
+]
+
+[[package]]
+name = "bevy_state_macros"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dee600b659c739f1911f997a81611fec0a1832cf731727956e5fa4e7532b4dd5"
+dependencies = [
+ "bevy_macro_utils 0.14.2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -4591,6 +4627,7 @@ dependencies = [
  "bevy_image",
  "bevy_mod_billboard",
  "bevy_rapier3d",
+ "bevy_schedules_ext",
  "bevy_single",
  "rand",
  "rand_chacha",

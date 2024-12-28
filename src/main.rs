@@ -13,7 +13,8 @@ fn main() -> AppExit {
                 loop_block,
                 collision,
                 gravity,
-            ),
+            )
+                .chain(),
         )
         .run()
 }
@@ -66,14 +67,11 @@ fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState)>) {
     }
 }
 
-fn jump(role_sv: Single<(&mut RoleSpeed, &RoleState)>) {
-    info!("pressed space");
-    let (mut role_speed, role_state) = role_sv.into_inner();
-    match role_state {
-        RoleState::Floor => {
-            role_speed.1 += 30000.0;
-        }
-        _ => (),
+fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
+    let (mut role_speed, mut role_state) = role_sv.into_inner();
+    if let RoleState::Floor = *role_state {
+        role_speed.1 += 100.0;
+        *role_state = RoleState::Air;
     }
 }
 
@@ -82,15 +80,17 @@ fn collision(
     role: Single<(&Transform, &mut RoleState)>,
 ) {
     let (role_transform, mut role_state) = role.into_inner();
-    for map_item_transform in map_items.iter() {
-        let yg = (map_item_transform.translation.y - role_transform.translation.y).abs();
-        let xg = (map_item_transform.translation.x - role_transform.translation.x).abs();
-        if xg < 100.0 && yg < 100.0 {
-            *role_state = RoleState::Floor;
-            return;
+    if let RoleState::Air = *role_state {
+        for map_item_transform in map_items.iter() {
+            let yg = (map_item_transform.translation.y - role_transform.translation.y).abs();
+            let xg = (map_item_transform.translation.x - role_transform.translation.x).abs();
+            if xg < 20.0 && yg < 20.0 {
+                info!("collision!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                *role_state = RoleState::Floor;
+                return;
+            }
         }
     }
-    *role_state = RoleState::Air;
 }
 
 const GRAVITY: f32 = 9.821 * 10.0;
@@ -104,7 +104,6 @@ fn role_move(
     >,
 ) {
     let (mut role_transform, speed) = role.into_inner();
-    info!("{}", speed.1);
     role_transform.translation.x += speed.0 * time.delta_secs();
     role_transform.translation.y += speed.1 * time.delta_secs();
     camera_transform.translation.x += speed.0 * time.delta_secs();
