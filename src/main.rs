@@ -1,9 +1,13 @@
 use bevy::input::common_conditions::input_just_pressed;
+use bevy::math::prelude::*;
 use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
 
 fn main() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugins(RapierDebugRenderPlugin::default())
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -11,10 +15,8 @@ fn main() -> AppExit {
                 jump.run_if(input_just_pressed(KeyCode::Space)),
                 role_move,
                 loop_block,
-                collision,
-                gravity,
-            )
-                .chain(),
+                display_events,
+            ),
         )
         .run()
 }
@@ -24,76 +26,102 @@ struct RoleSpeed(f32, f32);
 
 #[derive(Component)]
 enum RoleState {
-    Air,
-    Floor,
+    Jump,
+    Normal,
+}
+
+#[derive(Bundle)]
+struct MapItemBundle {
+    rigid: RigidBody,
+    collider: Collider,
+    position: Transform,
+    map_item: MapItem,
+}
+
+const FLOOR_H: f32 = 5.0;
+
+impl MapItemBundle {
+    fn rect_item(rect: Vec4, obstacle: bool) -> Self {
+        Self {
+            rigid: RigidBody::Fixed,
+            collider: Collider::cuboid(rect.z, rect.w - FLOOR_H),
+            position: Transform::from_xyz(rect.x, rect.y, 0.0),
+            map_item: if obstacle {
+                MapItem::Obstacle
+            } else {
+                MapItem::Normal
+            },
+        }
+    }
+
+    fn tri_obstacle(tri: Triangle2d) -> Self {
+        Self {
+            rigid: RigidBody::Fixed,
+            collider: Collider::triangle(tri.vertices[0], tri.vertices[1], tri.vertices[2]),
+            position: Transform::from_xyz(tri.vertices[0].x, tri.vertices[1].y, 0.0),
+            map_item: MapItem::Obstacle,
+        }
+    }
+}
+
+fn floor_gen(rect: Vec4) -> (MapItemBundle, MapItemBundle) {
+    let hw = 10.0;
+    let hy = rect.y + rect.w - hw;
+    let floor_high = MapItemBundle::rect_item(Vec4::new(rect.x, hy, rect.z, hw), false);
+    let floor_low = MapItemBundle::rect_item(Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true);
+    (floor_high, floor_low)
 }
 
 #[derive(Component)]
-struct MapItem;
+enum MapItem {
+    Obstacle,
+    Normal,
+}
 
 fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
     cmd.spawn(Camera2d::default());
 
-    let block_texture = asset_server.load("block.png");
+    //let block_texture = asset_server.load("block.png");
 
-    for i in 0..10 {
-        cmd.spawn((
-            Sprite::from_image(block_texture.clone()),
-            Transform::from_xyz(-200.0 + i as f32 * 112.0, -160.0, 0.0),
-            MapItem,
-        ));
-    }
+    let item_vec4 = Vec4::new(-100.0, -100.0, 10000.0, 100.0);
+    let (floor_high, floor_low) = floor_gen(item_vec4);
+    cmd.spawn(floor_high);
+    cmd.spawn(floor_low);
 
     cmd.spawn((
-        Sprite::from_image(asset_server.load("branding/bevy_bird_dark.png")),
-        RoleState::Air,
-        RoleSpeed(80.0, 0.0),
-        Transform::from_xyz(-100.0, 0.0, 0.0),
+        RigidBody::Dynamic,
+        Collider::ball(50.0),
+        Restitution::coefficient(0.0),
+        Friction::coefficient(0.0),
+        ActiveEvents::COLLISION_EVENTS,
+        Sprite::from_image(asset_server.load("block.png")),
+        RoleState::Normal,
+        RoleSpeed(400.0, 0.0),
+        Transform::from_xyz(-100.0, 200.0, 0.0),
     ));
 }
 
-fn gravity(time: Res<Time>, rss: Single<(&mut RoleSpeed, &RoleState)>) {
-    let delta = time.delta_secs();
-    let (mut speed, role_state) = rss.into_inner();
-    match role_state {
-        RoleState::Air => {
-            speed.1 -= GRAVITY * delta;
-        }
-        RoleState::Floor => {
-            if speed.1 != 0.0 {
-                speed.1 = 0.0;
-            }
+/* A system that displays the events. */
+fn display_events(
+    mut collision_events: EventReader<CollisionEvent>,
+    role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
+) {
+    let (mut role_speed, mut role_state) = role_sv.into_inner();
+    for collision_event in collision_events.read() {
+        if let CollisionEvent::Started(..) = collision_event {
+            *role_state = RoleState::Normal;
+            role_speed.1 = 0.0;
         }
     }
 }
 
 fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
-    if let RoleState::Floor = *role_state {
-        role_speed.1 += 100.0;
-        *role_state = RoleState::Air;
+    if let RoleState::Normal = *role_state {
+        *role_state = RoleState::Jump;
+        role_speed.1 += 600.0;
     }
 }
-
-fn collision(
-    map_items: Query<&Transform, With<MapItem>>,
-    role: Single<(&Transform, &mut RoleState)>,
-) {
-    let (role_transform, mut role_state) = role.into_inner();
-    if let RoleState::Air = *role_state {
-        for map_item_transform in map_items.iter() {
-            let yg = (map_item_transform.translation.y - role_transform.translation.y).abs();
-            let xg = (map_item_transform.translation.x - role_transform.translation.x).abs();
-            if xg < 20.0 && yg < 20.0 {
-                info!("collision!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                *role_state = RoleState::Floor;
-                return;
-            }
-        }
-    }
-}
-
-const GRAVITY: f32 = 9.821 * 10.0;
 
 fn role_move(
     role: Single<(&mut Transform, &RoleSpeed)>,
@@ -117,7 +145,8 @@ fn loop_block(
     for (item_entity, item_transform) in map_items.iter() {
         let far = camera_transform.translation.x - item_transform.translation.x;
         if far > 500.0 {
-            cmd.entity(item_entity).despawn();
+            //cmd.entity(item_entity).despawn();
+            //cmd.spawn(BlockBundle::default());
         }
     }
 }
