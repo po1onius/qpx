@@ -3,8 +3,14 @@ use bevy::math::prelude::*;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
+use serde::Deserialize;
+use std::fs::read_to_string;
+use std::path::Path;
+
 fn main() -> AppExit {
     App::new()
+        .insert_resource(LevelData::from_file("level_data/1.toml"))
+        .insert_resource(LevelIndex(0))
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
@@ -38,7 +44,54 @@ struct MapItemBundle {
     map_item: MapItem,
 }
 
+#[derive(Component)]
+enum MapItem {
+    Obstacle,
+    Normal,
+}
+
+#[derive(Deserialize)]
+struct LevelDataOrigin {
+    data: Vec<Vec<f32>>,
+}
+
+enum MapItemData {
+    Tri(Triangle2d),
+    Rect(Vec4),
+}
+
+#[derive(Resource)]
+struct LevelData {
+    data: Vec<MapItemData>,
+}
+
+#[derive(Resource)]
+struct LevelIndex(u32);
+
 const FLOOR_H: f32 = 5.0;
+const JUMP_SPEED: f32 = 600.0;
+
+impl LevelData {
+    fn from_file(path: impl AsRef<Path>) -> Self {
+        let file_data = read_to_string(path).unwrap();
+        let level_data_origin: LevelDataOrigin = toml::from_str(&file_data).unwrap();
+        let mut data = Vec::new();
+        for v in level_data_origin.data {
+            if v.len() == 4 {
+                data.push(MapItemData::Rect(Vec4::new(v[0], v[1], v[2], v[3])));
+            } else if v.len() == 6 {
+                data.push(MapItemData::Tri(Triangle2d::new(
+                    Vec2::new(v[0], v[1]),
+                    Vec2::new(v[2], v[3]),
+                    Vec2::new(v[4], v[5]),
+                )));
+            } else {
+                panic!();
+            }
+        }
+        Self { data }
+    }
+}
 
 impl MapItemBundle {
     fn rect_item(rect: Vec4, obstacle: bool) -> Self {
@@ -72,15 +125,8 @@ fn floor_gen(rect: Vec4) -> (MapItemBundle, MapItemBundle) {
     (floor_high, floor_low)
 }
 
-#[derive(Component)]
-enum MapItem {
-    Obstacle,
-    Normal,
-}
-
 fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
     cmd.spawn(Camera2d::default());
-
     //let block_texture = asset_server.load("block.png");
 
     let item_vec4 = Vec4::new(-100.0, -100.0, 10000.0, 100.0);
@@ -119,7 +165,7 @@ fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
     if let RoleState::Normal = *role_state {
         *role_state = RoleState::Jump;
-        role_speed.1 += 600.0;
+        role_speed.1 += JUMP_SPEED;
     }
 }
 

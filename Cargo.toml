@@ -16,8 +16,9 @@ bevy_image = "0.15"
 bevy_schedules_ext = "0.14.1"
 bevy_rapier2d = { version = "0.28.0", features = ["parallel", "simd-stable", "debug-render-2d"] }
 # avian2d = { version = "0.1.2", features = ["simd"] }
-serde = "1.0.214"
-serde_json = "1.0.132"
+serde = "1.0"
+serde_json = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 bevy_mod_billboard = "0.7.0"
+toml = "0.8"
