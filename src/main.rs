@@ -117,22 +117,25 @@ impl MapItemBundle {
     }
 }
 
-fn floor_gen(rect: Vec4) -> (MapItemBundle, MapItemBundle) {
+fn spawn_floor(cmd: &mut Commands, rect: Vec4) {
     let hw = 10.0;
     let hy = rect.y + rect.w - hw;
     let floor_high = MapItemBundle::rect_item(Vec4::new(rect.x, hy, rect.z, hw), false);
     let floor_low = MapItemBundle::rect_item(Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true);
-    (floor_high, floor_low)
+    cmd.spawn(floor_high);
+    cmd.spawn(floor_low);
 }
 
-fn setup(mut cmd: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut cmd: Commands, asset_server: Res<AssetServer>, level_data: Res<LevelData>) {
     cmd.spawn(Camera2d::default());
     //let block_texture = asset_server.load("block.png");
 
-    let item_vec4 = Vec4::new(-100.0, -100.0, 10000.0, 100.0);
-    let (floor_high, floor_low) = floor_gen(item_vec4);
-    cmd.spawn(floor_high);
-    cmd.spawn(floor_low);
+    match level_data.data[0] {
+        MapItemData::Rect(rect) => {
+            spawn_floor(&mut cmd, rect);
+        }
+        _ => (),
+    }
 
     cmd.spawn((
         RigidBody::Dynamic,
