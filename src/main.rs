@@ -21,7 +21,7 @@ fn main() -> AppExit {
                 jump.run_if(input_just_pressed(KeyCode::Space)),
                 role_move,
                 loop_block,
-                display_events,
+                collide_events,
             ),
         )
         .run()
@@ -130,11 +130,15 @@ fn setup(mut cmd: Commands, asset_server: Res<AssetServer>, level_data: Res<Leve
     cmd.spawn(Camera2d::default());
     //let block_texture = asset_server.load("block.png");
 
-    match level_data.data[0] {
-        MapItemData::Rect(rect) => {
-            spawn_floor(&mut cmd, rect);
+    for l in level_data.data.iter() {
+        match l {
+            MapItemData::Rect(rect) => {
+                spawn_floor(&mut cmd, *rect);
+            }
+            MapItemData::Tri(tri) => {
+                cmd.spawn(MapItemBundle::tri_obstacle(*tri));
+            }
         }
-        _ => (),
     }
 
     cmd.spawn((
@@ -151,13 +155,25 @@ fn setup(mut cmd: Commands, asset_server: Res<AssetServer>, level_data: Res<Leve
 }
 
 /* A system that displays the events. */
-fn display_events(
+fn collide_events(
     mut collision_events: EventReader<CollisionEvent>,
     role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
+    role_entity: Single<Entity, With<RoleState>>,
+    floor_entities: Query<(Entity, &MapItem)>,
 ) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
     for collision_event in collision_events.read() {
-        if let CollisionEvent::Started(..) = collision_event {
+        if let CollisionEvent::Started(entity1, entity2, _) = collision_event {
+            if *entity2 == *role_entity {
+                for (entity, map_item) in floor_entities.iter() {
+                    if let MapItem::Obstacle = map_item {
+                        if entity == *entity1 {
+                            info!("boom!");
+                            break;
+                        }
+                    }
+                }
+            }
             *role_state = RoleState::Normal;
             role_speed.1 = 0.0;
         }
