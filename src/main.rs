@@ -249,31 +249,29 @@ fn loop_block(
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
     map_item_entities: Query<(Entity, &MapItem)>,
 ) {
-    let entities: Vec<u32> = map_item_entities.iter().map(|(e, _)| e.index()).collect();
     fn despawn_by_lv_idx(
         cmd: &mut Commands,
         lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
         idx: u32,
-        entities: &Vec<u32>,
+        map_item_entities: &Query<(Entity, &MapItem)>,
     ) {
         if let Some((entity_id1, entity_op_id2)) = lv_idx_entity_paires.pairs.get(&idx) {
-            if !entities.contains(entity_id1) {
-                return;
-            }
-            print!("current entities: ");
-            for ent in entities {
-                print!("{} ", ent);
-            }
-            println!();
-            let entity1 = Entity::from_raw(*entity_id1);
-            info!("despawn: entity {}", entity_id1);
-            cmd.entity(entity1).despawn();
+            map_item_entities
+                .iter()
+                .find(|(entity, _)| entity.index() == *entity_id1)
+                .map(|(entity, _)| {
+                    info!("despawn: {}", entity_id1);
+                    cmd.entity(entity).despawn();
+                });
+
             if let Some(entity_id2) = entity_op_id2 {
-                if entities.contains(entity_id2) {
-                    let entity2 = Entity::from_raw(*entity_id2);
-                    info!("despawn: entity {}", entity_id2);
-                    cmd.entity(entity2).despawn();
-                }
+                map_item_entities
+                    .iter()
+                    .find(|(entity, _)| entity.index() == *entity_id2)
+                    .map(|(entity, _)| {
+                        info!("despawn: {}", entity_id2);
+                        cmd.entity(entity).despawn();
+                    });
             }
         }
         lv_idx_entity_paires.pairs.remove(&idx);
@@ -282,7 +280,12 @@ fn loop_block(
         match item_data {
             MapItemData::Rect(rect) => {
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
-                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32, &entities);
+                    despawn_by_lv_idx(
+                        &mut cmd,
+                        &mut lv_idx_entity_paires,
+                        i as u32,
+                        &map_item_entities,
+                    );
                 }
                 let ng = rect.x - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
@@ -292,7 +295,12 @@ fn loop_block(
             }
             MapItemData::Tri(tri) => {
                 if camera_transform.translation.x - tri.vertices[2][0] > 500.0 {
-                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32, &entities);
+                    despawn_by_lv_idx(
+                        &mut cmd,
+                        &mut lv_idx_entity_paires,
+                        i as u32,
+                        &map_item_entities,
+                    );
                 }
                 let ng = tri.vertices[0][0] - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
