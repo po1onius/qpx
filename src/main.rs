@@ -141,7 +141,7 @@ fn spawn_floor(
     let id2 = cmd.spawn(floor_low).id().index();
 
     lv_idx_entity_paires.pairs.insert(index, (id1, Some(id2)));
-    info!("spawn: index {}, entity {} {}", index, id1, id2);
+    info!("spawn: entity {} {}", id1, id2);
 }
 
 fn spawn_tri_obstacle(
@@ -155,7 +155,7 @@ fn spawn_tri_obstacle(
         .id()
         .index();
     lv_idx_entity_paires.pairs.insert(index, (id, None));
-    info!("sapwn: index {}, entity {}", index, id);
+    info!("sapwn: entity {}", id);
 }
 
 fn setup(
@@ -260,13 +260,18 @@ fn loop_block(
             if !entities.contains(entity_id1) {
                 return;
             }
+            print!("current entities: ");
+            for ent in entities {
+                print!("{} ", ent);
+            }
+            println!();
             let entity1 = Entity::from_raw(*entity_id1);
-            info!("despawn: index {}, entity {}", idx, entity_id1);
+            info!("despawn: entity {}", entity_id1);
             cmd.entity(entity1).despawn();
             if let Some(entity_id2) = entity_op_id2 {
                 if entities.contains(entity_id2) {
                     let entity2 = Entity::from_raw(*entity_id2);
-                    info!("despawn: index {}, entity {}", idx, entity_id2);
+                    info!("despawn: entity {}", entity_id2);
                     cmd.entity(entity2).despawn();
                 }
             }
