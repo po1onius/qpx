@@ -20,6 +20,7 @@ fn main() -> AppExit {
             Update,
             (
                 jump.run_if(input_just_pressed(KeyCode::Space)),
+                game_pause.run_if(input_just_pressed(KeyCode::Escape)),
                 role_move,
                 loop_block,
                 collide_events,
@@ -310,4 +311,12 @@ fn loop_block(
             }
         }
     }
+}
+
+fn game_pause(role_sc: Single<(&mut RoleSpeed, &mut RigidBody)>) {
+    info!("game pause");
+    let (mut role_speed, mut rigid_body) = role_sc.into_inner();
+    role_speed.0 = 0.0;
+    role_speed.1 = 0.0;
+    *rigid_body = RigidBody::Fixed;
 }
