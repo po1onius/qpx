@@ -19,6 +19,7 @@ fn main() -> AppExit {
         .add_systems(
             Update,
             (
+                gravity,
                 jump.run_if(input_just_pressed(KeyCode::Space)),
                 game_pause.run_if(input_just_pressed(KeyCode::Escape)),
                 role_move,
@@ -34,7 +35,7 @@ struct RoleSpeed(f32, f32);
 
 #[derive(Component)]
 enum RoleState {
-    Jump,
+    Air,
     Normal,
 }
 
@@ -74,6 +75,7 @@ struct IdxEntityPair {
 
 const FLOOR_H: f32 = 5.0;
 const JUMP_SPEED: f32 = 600.0;
+const GRAVITY: f32 = 1300.0;
 
 impl LevelData {
     fn from_file(path: impl AsRef<Path>) -> Self {
@@ -175,14 +177,22 @@ fn setup(
     cmd.spawn((
         RigidBody::Dynamic,
         Collider::ball(50.0),
+        GravityScale(0.0),
         Restitution::coefficient(0.0),
         Friction::coefficient(0.0),
         ActiveEvents::COLLISION_EVENTS,
         Sprite::from_image(asset_server.load("block.png")),
-        RoleState::Normal,
+        RoleState::Air,
         RoleSpeed(400.0, 0.0),
         Transform::from_xyz(-100.0, 200.0, 0.0),
     ));
+}
+
+fn gravity(role_sv: Single<(&mut RoleSpeed, &RoleState)>, time: Res<Time>) {
+    let (mut role_speed, role_state) = role_sv.into_inner();
+    if let RoleState::Air = *role_state {
+        role_speed.1 -= GRAVITY * time.delta_secs();
+    }
 }
 
 /* A system that displays the events. */
@@ -205,8 +215,12 @@ fn collide_events(
                     }
                 }
             }
+            info!("collide floor");
             *role_state = RoleState::Normal;
             role_speed.1 = 0.0;
+        }
+        if let CollisionEvent::Stopped(..) = collision_event {
+            *role_state = RoleState::Air;
         }
     }
 }
@@ -214,7 +228,7 @@ fn collide_events(
 fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
     if let RoleState::Normal = *role_state {
-        *role_state = RoleState::Jump;
+        *role_state = RoleState::Air;
         role_speed.1 += JUMP_SPEED;
     }
 }
