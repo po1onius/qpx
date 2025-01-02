@@ -44,7 +44,6 @@ struct MapItemBundle {
     collider: Collider,
     position: Transform,
     map_item: MapItem,
-    index: LevelIndex,
 }
 
 #[derive(Component)]
@@ -67,9 +66,6 @@ enum MapItemData {
 struct LevelData {
     data: Vec<MapItemData>,
 }
-
-#[derive(Component)]
-struct LevelIndex(u32);
 
 #[derive(Resource, Default)]
 struct IdxEntityPair {
@@ -102,7 +98,7 @@ impl LevelData {
 }
 
 impl MapItemBundle {
-    fn rect_item(rect: &Vec4, obstacle: bool, index: u32) -> Self {
+    fn rect_item(rect: &Vec4, obstacle: bool) -> Self {
         Self {
             rigid: RigidBody::Fixed,
             collider: Collider::cuboid(rect.z, rect.w - FLOOR_H),
@@ -112,17 +108,15 @@ impl MapItemBundle {
             } else {
                 MapItem::Normal
             },
-            index: LevelIndex(index),
         }
     }
 
-    fn tri_obstacle(tri: &Triangle2d, index: u32) -> Self {
+    fn tri_obstacle(tri: &Triangle2d) -> Self {
         Self {
             rigid: RigidBody::Fixed,
             collider: Collider::triangle(tri.vertices[0], tri.vertices[1], tri.vertices[2]),
             position: Transform::from_xyz(tri.vertices[0].x, tri.vertices[1].y, 0.0),
             map_item: MapItem::Obstacle,
-            index: LevelIndex(index),
         }
     }
 }
@@ -135,9 +129,8 @@ fn spawn_floor(
 ) {
     let hw = 10.0;
     let hy = rect.y + rect.w - hw;
-    let floor_high = MapItemBundle::rect_item(&Vec4::new(rect.x, hy, rect.z, hw), false, index);
-    let floor_low =
-        MapItemBundle::rect_item(&Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true, index);
+    let floor_high = MapItemBundle::rect_item(&Vec4::new(rect.x, hy, rect.z, hw), false);
+    let floor_low = MapItemBundle::rect_item(&Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true);
     let id1 = cmd.spawn(floor_high).id().index();
     let id2 = cmd.spawn(floor_low).id().index();
 
@@ -151,10 +144,7 @@ fn spawn_tri_obstacle(
     index: u32,
     lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
 ) {
-    let id = cmd
-        .spawn(MapItemBundle::tri_obstacle(tri, index))
-        .id()
-        .index();
+    let id = cmd.spawn(MapItemBundle::tri_obstacle(tri)).id().index();
     lv_idx_entity_paires.pairs.insert(index, (id, None));
     info!("sapwn: entity {}", id);
 }
