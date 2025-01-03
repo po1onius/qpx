@@ -3,6 +3,10 @@ name = "qpx"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "lveditor"
+path = "lveditor/main.rs"
+
 [dependencies]
 bevy = { version = "0.15", features = [
     "dynamic_linking",
