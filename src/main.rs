@@ -15,6 +15,7 @@ fn main() -> AppExit {
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
+        .init_state::<GameState>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -28,6 +29,13 @@ fn main() -> AppExit {
             ),
         )
         .run()
+}
+
+#[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+enum GameState {
+    #[default]
+    Playing,
+    Paused,
 }
 
 #[derive(Component)]
@@ -322,5 +330,4 @@ fn game_pause(role_sc: Single<(&mut RoleSpeed, &mut RigidBody)>) {
     let (mut role_speed, mut rigid_body) = role_sc.into_inner();
     role_speed.0 = 0.0;
     role_speed.1 = 0.0;
-    *rigid_body = RigidBody::Fixed;
 }
