@@ -8,6 +8,10 @@ default-run = "qpx"
 name = "lveditor"
 path = "lveditor/main.rs"
 
+[[bin]]
+name = "lved_egui"
+path = "lved_egui/main.rs"
+
 [dependencies]
 bevy = { version = "0.15", features = [
     "dynamic_linking",
@@ -27,3 +31,15 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 bevy_mod_billboard = "0.7.0"
 toml = "0.8"
+#[dependencies.lved_egui]
+eframe = { version = "0.30", features = [
+    "default"
+] }
+
+# For image support:
+egui_extras = { version = "0.30", features = ["default", "image"] }
+
+env_logger = { version = "0.10", default-features = false, features = [
+    "auto-color",
+    "humantime",
+] }
