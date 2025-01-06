@@ -35,18 +35,34 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name)
-                    .labelled_by(name_label.id);
+            ui.label("eee");
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for i in 0..100 {
+                        let (rect, response) =
+                            ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+
+                        // 绘制背景
+                        let color = if response.hovered() {
+                            egui::Color32::LIGHT_BLUE
+                        } else {
+                            egui::Color32::LIGHT_GRAY
+                        };
+                        ui.painter().rect_filled(rect, 5.0, color);
+
+                        // 在矩形中自定义绘制 Label 的位置
+                        let label_text = format!("Label {}", i);
+                        let label_pos = rect.min + egui::vec2(20.0, 40.0); // 自定义位置
+                        ui.painter().text(
+                            label_pos,
+                            egui::Align2::LEFT_CENTER,
+                            label_text,
+                            egui::TextStyle::Body.resolve(ui.style()),
+                            egui::Color32::BLACK,
+                        );
+                    }
+                });
             });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Increment").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
-            ui.label("你好");
         });
     }
 }
