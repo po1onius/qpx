@@ -5,10 +5,6 @@ edition = "2021"
 default-run = "qpx"
 
 [[bin]]
-name = "lveditor"
-path = "lveditor/main.rs"
-
-[[bin]]
 name = "lved_egui"
 path = "lved_egui/main.rs"
 

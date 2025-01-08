@@ -1,4 +1,5 @@
 use eframe::egui;
+use std::{fs::OpenOptions, io::Write};
 
 fn main() {
     let options = eframe::NativeOptions::default();
@@ -30,6 +31,11 @@ struct LevelEditor {
     rects: Vec<EditRect>,
 }
 
+#[derive(serde::Serialize)]
+struct LevelData {
+    data: Vec<Vec<f32>>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum EditOption {
     Left,
@@ -46,17 +52,19 @@ impl EditRect {
         let rect = egui::Rect::from_min_size(self.rect_pos, self.rect_size);
         let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
-        let scroll_offset = ui.clip_rect().min;
-
-        // 调整矩形的位置，使其随滚动偏移而移动
-        self.rect_pos = self.rect_pos - scroll_offset.to_vec2();
-
         // 绘制矩形
         ui.painter().rect_stroke(
             rect,
             egui::Rounding::same(0.0),
             egui::Stroke::new(2.0, egui::Color32::WHITE),
         );
+
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            self.rect_pos.x -= 10.0; // 按下左键，向左移动
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            self.rect_pos.x += 10.0; // 按下右键，向右移动
+        }
 
         // 检测鼠标是否在边框附近
         let mouse_pos = ui.input(|i| i.pointer.interact_pos());
@@ -156,13 +164,38 @@ impl eframe::App for LevelEditor {
                 let rect = EditRect::default();
                 self.rects.push(rect);
             }
-            egui::ScrollArea::horizontal()
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                .show(ui, |ui| {
-                    for rect in self.rects.iter_mut() {
-                        rect.spawn_rect(ui);
-                    }
-                });
+
+            let mut lv_data = LevelData { data: Vec::new() };
+            if ui.button("save data").clicked() {
+                for rect in self.rects.iter() {
+                    let mut vt = Vec::new();
+                    vt.push(rect.rect_pos.x);
+                    vt.push(rect.rect_pos.y);
+                    vt.push(rect.rect_size.x);
+                    vt.push(rect.rect_size.y);
+                    lv_data.data.push(vt);
+                }
+
+                lv_data
+                    .data
+                    .sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap());
+
+                let fix_offset = -lv_data.data[0][0];
+                for i in lv_data.data.iter_mut() {
+                    i[0] += fix_offset;
+                }
+
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open("level_data/new.toml")
+                    .unwrap();
+                let s = toml::to_string(&lv_data).unwrap();
+                let _ = file.write_all(s.as_bytes());
+            }
+            for rect in self.rects.iter_mut() {
+                rect.spawn_rect(ui);
+            }
         });
     }
 }

@@ -10,7 +10,7 @@ use std::path::Path;
 
 fn main() -> AppExit {
     App::new()
-        .insert_resource(LevelData::from_file("level_data/1.toml"))
+        .insert_resource(LevelData::from_file("level_data/new.toml"))
         .insert_resource(IdxEntityPair::default())
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
