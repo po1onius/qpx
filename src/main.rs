@@ -1,6 +1,7 @@
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::math::prelude::*;
 use bevy::prelude::*;
+use bevy::window::WindowResolution;
 use bevy_rapier2d::prelude::*;
 
 use serde::Deserialize;
@@ -12,7 +13,14 @@ fn main() -> AppExit {
     App::new()
         .insert_resource(LevelData::from_file("level_data/new.toml"))
         .insert_resource(IdxEntityPair::default())
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(1280.0, 720.0).with_scale_factor_override(1.0),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
@@ -191,7 +199,7 @@ fn setup(
         ActiveEvents::COLLISION_EVENTS,
         Sprite::from_image(asset_server.load("block.png")),
         RoleState::Air,
-        RoleSpeed(400.0, 0.0),
+        RoleSpeed(300.0, 0.0),
         Transform::from_xyz(-100.0, 200.0, 0.0),
     ));
 }
