@@ -30,11 +30,15 @@ fn main() -> AppExit {
             (
                 gravity,
                 jump.run_if(input_just_pressed(KeyCode::Space)),
-                game_pause.run_if(input_just_pressed(KeyCode::Escape)),
                 role_move,
                 loop_block,
                 collide_events,
-            ),
+            )
+                .run_if(in_state(GameState::Playing)),
+        )
+        .add_systems(
+            Update,
+            game_pause_play.run_if(input_just_pressed(KeyCode::Escape)),
         )
         .run()
 }
@@ -217,6 +221,7 @@ fn collide_events(
     role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
     role_entity: Single<Entity, With<RoleState>>,
     floor_entities: Query<(Entity, &MapItem)>,
+    mut nxt_state: ResMut<NextState<GameState>>,
 ) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
     for collision_event in collision_events.read() {
@@ -225,6 +230,7 @@ fn collide_events(
                 for (entity, map_item) in floor_entities.iter() {
                     if let MapItem::Obstacle = map_item {
                         if entity == *entity1 {
+                            nxt_state.set(GameState::Paused);
                             info!("boom!");
                             break;
                         }
@@ -333,9 +339,15 @@ fn loop_block(
     }
 }
 
-fn game_pause(role_sc: Single<(&mut RoleSpeed, &mut RigidBody)>) {
-    info!("game pause");
-    let (mut role_speed, mut rigid_body) = role_sc.into_inner();
-    role_speed.0 = 0.0;
-    role_speed.1 = 0.0;
+fn game_pause_play(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState<GameState>>) {
+    match state.get() {
+        GameState::Playing => {
+            info!("game pause");
+            nxt_state.set(GameState::Paused);
+        }
+        GameState::Paused => {
+            info!("game continue");
+            nxt_state.set(GameState::Playing);
+        }
+    }
 }
