@@ -12,7 +12,7 @@ fn main() {
     let _ = eframe::run_native(
         "Resizable Rectangle with Border Drag",
         options,
-        Box::new(|_| Ok(Box::new(LevelEditor::from_toml("level_data/new.toml")))),
+        Box::new(|_| Ok(Box::new(LevelEditor::from_toml("level_data/egui.toml")))),
     );
 }
 
@@ -192,7 +192,7 @@ impl eframe::App for LevelEditor {
                 self.rects.push(rect);
             }
 
-            let mut lv_data = LevelData { data: Vec::new() };
+            let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
                 for rect in self.rects.iter() {
                     let mut vt = Vec::new();
@@ -200,20 +200,30 @@ impl eframe::App for LevelEditor {
                     vt.push(rect.rect_pos.y);
                     vt.push(rect.rect_size.x);
                     vt.push(rect.rect_size.y);
-                    lv_data.data.push(vt);
+                    lv_data_ori.data.push(vt);
                 }
 
-                lv_data
+                lv_data_ori
                     .data
                     .sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap());
 
+                let mut file_ori = OpenOptions::new()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open("level_data/egui.toml")
+                    .unwrap();
+                let s = toml::to_string(&lv_data_ori).unwrap();
+                let _ = file_ori.write_all(s.as_bytes());
                 let mut file = OpenOptions::new()
                     .create(true)
                     .truncate(true)
                     .write(true)
                     .open("level_data/new.toml")
                     .unwrap();
-                let s = toml::to_string(&lv_data).unwrap();
+
+                egui2bevy(&mut lv_data_ori);
+                let s = toml::to_string(&lv_data_ori).unwrap();
                 let _ = file.write_all(s.as_bytes());
             }
             for rect in self.rects.iter_mut() {
@@ -223,6 +233,12 @@ impl eframe::App for LevelEditor {
     }
 }
 
-fn egui2bevy(vec: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
-    vec.to_owned()
+fn egui2bevy(ld: &mut LevelData) {
+    for i in ld.data.iter_mut() {
+        i[0] = i[0] + i[2] / 2.0;
+        i[1] = i[1] + i[3] / 2.0;
+        i[1] = 720.0 - i[1] - 360.0;
+        i[2] /= 2.0;
+        i[3] /= 2.0;
+    }
 }
