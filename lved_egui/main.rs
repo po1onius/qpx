@@ -1,12 +1,18 @@
 use eframe::egui;
-use std::{fs::OpenOptions, io::Write};
+use std::{
+    fs::{read_to_string, OpenOptions},
+    io::Write,
+    path::Path,
+};
 
 fn main() {
-    let options = eframe::NativeOptions::default();
-    eframe::run_native(
+    let mut options = eframe::NativeOptions::default();
+    options.viewport.resizable = Some(false);
+    options.viewport.inner_size = Some(egui::Vec2::new(1280.0, 720.0));
+    let _ = eframe::run_native(
         "Resizable Rectangle with Border Drag",
         options,
-        Box::new(|cc| Ok(Box::<LevelEditor>::default())),
+        Box::new(|_| Ok(Box::new(LevelEditor::from_toml("level_data/new.toml")))),
     );
 }
 
@@ -31,7 +37,7 @@ struct LevelEditor {
     rects: Vec<EditRect>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct LevelData {
     data: Vec<Vec<f32>>,
 }
@@ -42,10 +48,31 @@ enum EditOption {
     Right,
     Top,
     Bottom,
-    Pos,
+    Pos(egui::Vec2),
 }
 
 const EDGE_THRESHOLD: f32 = 10.0;
+
+impl LevelEditor {
+    fn from_toml(path: impl AsRef<Path>) -> Self {
+        let data_str_res = read_to_string(path);
+        if let Ok(data_str) = data_str_res {
+            let lv_data: LevelData = toml::from_str(&data_str).unwrap();
+            let mut rects = Vec::new();
+            for i in lv_data.data.iter() {
+                let rect = EditRect {
+                    rect_pos: egui::Pos2 { x: i[0], y: i[1] },
+                    rect_size: egui::Vec2::new(i[2], i[3]),
+                    is_editing: None,
+                };
+                rects.push(rect);
+            }
+            Self { rects }
+        } else {
+            return Self::default();
+        }
+    }
+}
 
 impl EditRect {
     fn spawn_rect(&mut self, ui: &mut egui::Ui) {
@@ -69,46 +96,46 @@ impl EditRect {
         // 检测鼠标是否在边框附近
         let mouse_pos = ui.input(|i| i.pointer.interact_pos());
         if let Some(mouse_pos) = mouse_pos {
-            let mut hovered_edge = None;
+            let mut hold = None;
 
             // 检测左、右、上、下边框
             if (mouse_pos.x - rect.min.x).abs() < EDGE_THRESHOLD
                 && rect.max.y > mouse_pos.y
                 && rect.min.y < mouse_pos.y
             {
-                hovered_edge = Some(EditOption::Left);
+                hold = Some(EditOption::Left);
             } else if (mouse_pos.x - rect.max.x).abs() < EDGE_THRESHOLD
                 && rect.max.y > mouse_pos.y
                 && rect.min.y < mouse_pos.y
             {
-                hovered_edge = Some(EditOption::Right);
+                hold = Some(EditOption::Right);
             } else if (mouse_pos.y - rect.min.y).abs() < EDGE_THRESHOLD
                 && rect.max.x > mouse_pos.x
                 && rect.min.x < mouse_pos.x
             {
-                hovered_edge = Some(EditOption::Top);
+                hold = Some(EditOption::Top);
             } else if (mouse_pos.y - rect.max.y).abs() < EDGE_THRESHOLD
                 && rect.max.x > mouse_pos.x
                 && rect.min.x < mouse_pos.x
             {
-                hovered_edge = Some(EditOption::Bottom);
+                hold = Some(EditOption::Bottom);
             } else if rect.contains(mouse_pos) {
-                hovered_edge = Some(EditOption::Pos);
+                hold = Some(EditOption::Pos(mouse_pos - self.rect_pos));
             }
 
             // 更新光标图标
-            if let Some(edge) = hovered_edge {
+            if let Some(edge) = hold {
                 let cursor_icon = match edge {
                     EditOption::Left | EditOption::Right => egui::CursorIcon::ResizeHorizontal,
                     EditOption::Top | EditOption::Bottom => egui::CursorIcon::ResizeVertical,
-                    EditOption::Pos => egui::CursorIcon::Move,
+                    EditOption::Pos(_) => egui::CursorIcon::Move,
                 };
                 ui.output_mut(|o| o.cursor_icon = cursor_icon);
             }
 
             // 开始调整大小
             if response.drag_started() {
-                self.is_editing = hovered_edge;
+                self.is_editing = hold;
             }
 
             // 调整矩形大小
@@ -140,11 +167,11 @@ impl EditRect {
                             self.rect_size.y = height;
                         }
                     }
-                    EditOption::Pos => {
-                        if ui.input(|i| i.pointer.primary_down()) {
-                            // 更新矩形位置为鼠标位置
-                            self.rect_pos = mouse_pos - self.rect_size / 2.0;
-                        }
+                    EditOption::Pos(move_fix) => {
+                        //if ui.input(|i| i.pointer.primary_down()) {
+                        // 更新矩形位置为鼠标位置
+                        self.rect_pos = mouse_pos - move_fix; // - self.rect_pos.to_vec2();
+                                                              //}
                     }
                 }
             }
@@ -180,13 +207,9 @@ impl eframe::App for LevelEditor {
                     .data
                     .sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap());
 
-                let fix_offset = -lv_data.data[0][0];
-                for i in lv_data.data.iter_mut() {
-                    i[0] += fix_offset;
-                }
-
                 let mut file = OpenOptions::new()
                     .create(true)
+                    .truncate(true)
                     .write(true)
                     .open("level_data/new.toml")
                     .unwrap();
@@ -198,4 +221,8 @@ impl eframe::App for LevelEditor {
             }
         });
     }
+}
+
+fn egui2bevy(vec: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
+    vec.to_owned()
 }
