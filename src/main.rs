@@ -90,7 +90,7 @@ struct LevelData {
 
 #[derive(Resource, Default)]
 struct IdxEntityPair {
-    pairs: HashMap<u32, (u32, Option<u32>)>,
+    pairs: HashMap<u32, (Entity, Option<Entity>)>,
 }
 
 const FLOOR_H: f32 = 5.0;
@@ -154,8 +154,8 @@ fn spawn_floor(
     let hy = rect.y + rect.w - hw;
     let floor_high = MapItemBundle::rect_item(&Vec4::new(rect.x, hy, rect.z, hw), false);
     let floor_low = MapItemBundle::rect_item(&Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true);
-    let id1 = cmd.spawn(floor_high).id().index();
-    let id2 = cmd.spawn(floor_low).id().index();
+    let id1 = cmd.spawn(floor_high).id();
+    let id2 = cmd.spawn(floor_low).id();
 
     lv_idx_entity_paires.pairs.insert(index, (id1, Some(id2)));
     info!("spawn: entity {} {}", id1, id2);
@@ -167,7 +167,7 @@ fn spawn_tri_obstacle(
     index: u32,
     lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
 ) {
-    let id = cmd.spawn(MapItemBundle::tri_obstacle(tri)).id().index();
+    let id = cmd.spawn(MapItemBundle::tri_obstacle(tri)).id();
     lv_idx_entity_paires.pairs.insert(index, (id, None));
     info!("sapwn: entity {}", id);
 }
@@ -275,31 +275,19 @@ fn loop_block(
     camera_transform: Single<&Transform, (With<Camera>, Without<RoleSpeed>, Without<MapItem>)>,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
-    map_item_entities: Query<(Entity, &MapItem)>,
 ) {
     fn despawn_by_lv_idx(
         cmd: &mut Commands,
         lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
         idx: u32,
-        map_item_entities: &Query<(Entity, &MapItem)>,
     ) {
-        if let Some((entity_id1, entity_op_id2)) = lv_idx_entity_paires.pairs.get(&idx) {
-            map_item_entities
-                .iter()
-                .find(|(entity, _)| entity.index() == *entity_id1)
-                .map(|(entity, _)| {
-                    info!("despawn: {}", entity_id1);
-                    cmd.entity(entity).despawn();
-                });
+        if let Some((entity, entity_op)) = lv_idx_entity_paires.pairs.get(&idx) {
+            info!("despawn: {}", entity);
+            cmd.entity(*entity).despawn();
 
-            if let Some(entity_id2) = entity_op_id2 {
-                map_item_entities
-                    .iter()
-                    .find(|(entity, _)| entity.index() == *entity_id2)
-                    .map(|(entity, _)| {
-                        info!("despawn: {}", entity_id2);
-                        cmd.entity(entity).despawn();
-                    });
+            if let Some(entity) = entity_op {
+                info!("despawn: {}", entity);
+                cmd.entity(*entity).despawn();
             }
         }
         lv_idx_entity_paires.pairs.remove(&idx);
@@ -308,12 +296,7 @@ fn loop_block(
         match item_data {
             MapItemData::Rect(rect) => {
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
-                    despawn_by_lv_idx(
-                        &mut cmd,
-                        &mut lv_idx_entity_paires,
-                        i as u32,
-                        &map_item_entities,
-                    );
+                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
                 let ng = rect.x - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
@@ -323,12 +306,7 @@ fn loop_block(
             }
             MapItemData::Tri(tri) => {
                 if camera_transform.translation.x - tri.vertices[2][0] > 500.0 {
-                    despawn_by_lv_idx(
-                        &mut cmd,
-                        &mut lv_idx_entity_paires,
-                        i as u32,
-                        &map_item_entities,
-                    );
+                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
                 let ng = tri.vertices[0][0] - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
