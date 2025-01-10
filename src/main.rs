@@ -96,6 +96,7 @@ struct IdxEntityPair {
 const FLOOR_H: f32 = 5.0;
 const JUMP_SPEED: f32 = 600.0;
 const GRAVITY: f32 = 1300.0;
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 
 impl LevelData {
     fn from_file(path: impl AsRef<Path>) -> Self {
@@ -339,10 +340,15 @@ fn loop_block(
     }
 }
 
-fn game_pause_play(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState<GameState>>) {
+fn game_pause_play(
+    mut cmd: Commands,
+    state: Res<State<GameState>>,
+    mut nxt_state: ResMut<NextState<GameState>>,
+) {
     match state.get() {
         GameState::Playing => {
             info!("game pause");
+            spawn_pause_ui(&mut cmd);
             nxt_state.set(GameState::Paused);
         }
         GameState::Paused => {
@@ -350,4 +356,41 @@ fn game_pause_play(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState
             nxt_state.set(GameState::Playing);
         }
     }
+}
+
+fn spawn_pause_ui(cmd: &mut Commands) {
+    cmd.spawn(Node {
+        // center button
+        width: Val::Percent(100.),
+        height: Val::Percent(100.),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    })
+    .with_children(|parent| {
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Px(150.),
+                    height: Val::Px(65.),
+                    // horizontally center child text
+                    justify_content: JustifyContent::Center,
+                    // vertically center child text
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(NORMAL_BUTTON),
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    Text::new("Play"),
+                    TextFont {
+                        font_size: 33.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                ));
+            });
+    });
 }
