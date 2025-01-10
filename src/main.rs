@@ -24,7 +24,8 @@ fn main() -> AppExit {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
-        .add_systems(Startup, setup)
+        .add_systems(Startup, spawn_main_menu)
+        .add_systems(OnEnter(GameState::InitLevel), game_init)
         .add_systems(
             Update,
             (
@@ -38,7 +39,11 @@ fn main() -> AppExit {
         )
         .add_systems(
             Update,
-            game_pause_play.run_if(input_just_pressed(KeyCode::Escape)),
+            (
+                game_pause_play.run_if(input_just_pressed(KeyCode::Escape)),
+                start_playing.run_if(input_just_pressed(KeyCode::Enter)),
+                start_button_action.run_if(in_state(GameState::Main)),
+            ),
         )
         .run()
 }
@@ -46,6 +51,8 @@ fn main() -> AppExit {
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 enum GameState {
     #[default]
+    Main,
+    InitLevel,
     Playing,
     Paused,
 }
@@ -73,6 +80,24 @@ enum MapItem {
     Normal,
 }
 
+#[derive(Component)]
+struct StartGameButton;
+
+#[derive(Component)]
+struct LeftSelectButton;
+
+#[derive(Component)]
+struct RightSelectButton;
+
+#[derive(Component)]
+struct ContinueButton;
+
+#[derive(Component)]
+struct ReturnMainMenuButton;
+
+#[derive(Component)]
+struct MainUIEntity;
+
 #[derive(Deserialize)]
 struct LevelDataOrigin {
     data: Vec<Vec<f32>>,
@@ -93,10 +118,11 @@ struct IdxEntityPair {
     pairs: HashMap<u32, (Entity, Option<Entity>)>,
 }
 
-const FLOOR_H: f32 = 5.0;
+const FLOOR_H: f32 = 20.0;
 const JUMP_SPEED: f32 = 600.0;
 const GRAVITY: f32 = 1300.0;
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const BALL_SIZE: f32 = 30.0;
 
 impl LevelData {
     fn from_file(path: impl AsRef<Path>) -> Self {
@@ -124,7 +150,7 @@ impl MapItemBundle {
     fn rect_item(rect: &Vec4, obstacle: bool) -> Self {
         Self {
             rigid: RigidBody::Fixed,
-            collider: Collider::cuboid(rect.z, rect.w - FLOOR_H),
+            collider: Collider::cuboid(rect.z, rect.w),
             position: Transform::from_xyz(rect.x, rect.y, 0.0),
             map_item: if obstacle {
                 MapItem::Obstacle
@@ -150,10 +176,13 @@ fn spawn_floor(
     index: u32,
     lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
 ) {
-    let hw = 10.0;
-    let hy = rect.y + rect.w - hw;
-    let floor_high = MapItemBundle::rect_item(&Vec4::new(rect.x, hy, rect.z, hw), false);
-    let floor_low = MapItemBundle::rect_item(&Vec4::new(rect.x, rect.y, rect.z, rect.w - hw), true);
+    let hw = FLOOR_H;
+    let hy = rect.y + rect.w - hw / 2.0;
+    let floor_high = MapItemBundle::rect_item(&Vec4::new(rect.x, hy, rect.z, hw / 2.0), false);
+    let floor_low = MapItemBundle::rect_item(
+        &Vec4::new(rect.x, rect.y - hw / 2.0, rect.z, rect.w - hw / 2.0),
+        true,
+    );
     let id1 = cmd.spawn(floor_high).id();
     let id2 = cmd.spawn(floor_low).id();
 
@@ -172,13 +201,12 @@ fn spawn_tri_obstacle(
     info!("sapwn: entity {}", id);
 }
 
-fn setup(
+fn game_init(
     mut cmd: Commands,
     asset_server: Res<AssetServer>,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
-    cmd.spawn(Camera2d::default());
     //let block_texture = asset_server.load("block.png");
 
     for (i, l) in level_data.data.iter().enumerate() {
@@ -197,12 +225,13 @@ fn setup(
 
     cmd.spawn((
         RigidBody::Dynamic,
-        Collider::ball(50.0),
+        Ccd::enabled(),
+        Collider::ball(BALL_SIZE),
         GravityScale(0.0),
         Restitution::coefficient(0.0),
         Friction::coefficient(0.0),
         ActiveEvents::COLLISION_EVENTS,
-        Sprite::from_image(asset_server.load("block.png")),
+        //Sprite::from_image(asset_server.load("block.png")),
         RoleState::Air,
         RoleSpeed(300.0, 0.0),
         Transform::from_xyz(-100.0, 200.0, 0.0),
@@ -333,10 +362,33 @@ fn game_pause_play(
             info!("game continue");
             nxt_state.set(GameState::Playing);
         }
+        _ => (),
     }
 }
 
-fn spawn_pause_ui(cmd: &mut Commands) {
+fn spawn_main_menu(mut cmd: Commands) {
+    cmd.spawn(Camera2d::default());
+    let btn_bundle = (
+        Button,
+        Node {
+            width: Val::Px(150.),
+            height: Val::Px(65.),
+            // horizontally center child text
+            justify_content: JustifyContent::Center,
+            // vertically center child text
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        BackgroundColor(NORMAL_BUTTON),
+    );
+    let btn_text_bundle = (
+        TextFont {
+            font_size: 33.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+    );
+
     cmd.spawn(Node {
         // center button
         width: Val::Percent(100.),
@@ -346,29 +398,114 @@ fn spawn_pause_ui(cmd: &mut Commands) {
         ..default()
     })
     .with_children(|parent| {
-        parent
-            .spawn((
-                Button,
-                Node {
-                    width: Val::Px(150.),
-                    height: Val::Px(65.),
-                    // horizontally center child text
-                    justify_content: JustifyContent::Center,
-                    // vertically center child text
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(NORMAL_BUTTON),
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    Text::new("Play"),
-                    TextFont {
-                        font_size: 33.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                ));
-            });
+        for i in ["<", ">", "start"] {
+            match i {
+                "<" => {
+                    parent
+                        .spawn((btn_bundle.clone(), LeftSelectButton))
+                        .with_children(|parent| {
+                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                        });
+                }
+                ">" => {
+                    parent
+                        .spawn((btn_bundle.clone(), RightSelectButton))
+                        .with_children(|parent| {
+                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                        });
+                }
+                "start" => {
+                    parent
+                        .spawn((btn_bundle.clone(), StartGameButton))
+                        .with_children(|parent| {
+                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                        });
+                }
+                _ => (),
+            }
+        }
+    })
+    .insert(MainUIEntity);
+}
+
+fn spawn_pause_ui(cmd: &mut Commands) {
+    let btn_bundle = (
+        Button,
+        Node {
+            width: Val::Px(150.),
+            height: Val::Px(65.),
+            // horizontally center child text
+            justify_content: JustifyContent::Center,
+            // vertically center child text
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        BackgroundColor(NORMAL_BUTTON),
+    );
+    let btn_text_bundle = (
+        TextFont {
+            font_size: 33.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+    );
+
+    cmd.spawn(Node {
+        // center button
+        width: Val::Percent(100.),
+        height: Val::Percent(100.),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    })
+    .with_children(|parent| {
+        for i in ["continue", "return"] {
+            match i {
+                "continue" => {
+                    parent
+                        .spawn((btn_bundle.clone(), ContinueButton))
+                        .with_children(|parent| {
+                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                        });
+                }
+                "return" => {
+                    parent
+                        .spawn((btn_bundle.clone(), ReturnMainMenuButton))
+                        .with_children(|parent| {
+                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                        });
+                }
+                _ => (),
+            }
+        }
     });
+}
+
+fn start_button_action(
+    mut cmd: Commands,
+    start_button: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
+    mut next_state: ResMut<NextState<GameState>>,
+    main_ui: Single<Entity, With<MainUIEntity>>,
+) {
+    let Ok(interaction) = start_button.get_single() else {
+        return;
+    };
+    if let Interaction::Pressed = interaction {
+        cmd.entity(*main_ui).despawn_recursive();
+        next_state.set(GameState::InitLevel);
+    }
+}
+
+fn start_playing(
+    mut cmd: Commands,
+    state: Res<State<GameState>>,
+    mut nxt_state: ResMut<NextState<GameState>>,
+) {
+    match state.get() {
+        GameState::InitLevel => {
+            info!("game start");
+            nxt_state.set(GameState::Playing);
+        }
+        _ => (),
+    }
 }
