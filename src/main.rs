@@ -206,8 +206,14 @@ fn game_init(
     asset_server: Res<AssetServer>,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
+    mut camera_transform: Single<
+        &mut Transform,
+        (With<Camera>, Without<RoleSpeed>, Without<MapItem>),
+    >,
 ) {
     //let block_texture = asset_server.load("block.png");
+    camera_transform.translation.x = 0.0;
+    camera_transform.translation.y = 0.0;
 
     for (i, l) in level_data.data.iter().enumerate() {
         if i > 1 {
@@ -247,6 +253,7 @@ fn gravity(role_sv: Single<(&mut RoleSpeed, &RoleState)>, time: Res<Time>) {
 
 /* A system that displays the events. */
 fn collide_events(
+    mut cmd: Commands,
     mut collision_events: EventReader<CollisionEvent>,
     role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
     role_entity: Single<Entity, With<RoleState>>,
@@ -260,8 +267,13 @@ fn collide_events(
                 for (entity, map_item) in floor_entities.iter() {
                     if let MapItem::Obstacle = map_item {
                         if entity == *entity1 {
-                            nxt_state.set(GameState::Paused);
+                            //nxt_state.set(GameState::Paused);
                             info!("boom!");
+                            for (dee, _) in floor_entities.iter() {
+                                cmd.entity(dee).despawn();
+                            }
+                            cmd.entity(*role_entity).despawn();
+                            nxt_state.set(GameState::InitLevel);
                             break;
                         }
                     }
@@ -496,11 +508,7 @@ fn start_button_action(
     }
 }
 
-fn start_playing(
-    mut cmd: Commands,
-    state: Res<State<GameState>>,
-    mut nxt_state: ResMut<NextState<GameState>>,
-) {
+fn start_playing(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState<GameState>>) {
     match state.get() {
         GameState::InitLevel => {
             info!("game start");
