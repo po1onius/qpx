@@ -6,12 +6,12 @@ use bevy_rapier2d::prelude::*;
 
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs::read_to_string;
+use std::fs::{read_dir, read_to_string};
 use std::path::Path;
 
 fn main() -> AppExit {
     App::new()
-        .insert_resource(LevelData::from_file("level_data/new.toml"))
+        .insert_resource(CurLevel::default())
         .insert_resource(IdxEntityPair::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -24,7 +24,7 @@ fn main() -> AppExit {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
-        .add_systems(Startup, spawn_main_menu)
+        .add_systems(Startup, setup)
         .add_systems(OnEnter(GameState::InitLevel), game_init)
         .add_systems(
             Update,
@@ -118,11 +118,28 @@ struct IdxEntityPair {
     pairs: HashMap<u32, (Entity, Option<Entity>)>,
 }
 
+#[derive(Resource)]
+struct CurLevel {
+    lvs: Vec<String>,
+    cur_idx: u32,
+}
+
+impl Default for CurLevel {
+    fn default() -> Self {
+        let dirs = read_dir(LV_DATA_PATH).unwrap();
+        let lvs = dirs
+            .map(|e| e.unwrap().path().to_str().to_owned().unwrap().to_string())
+            .collect::<Vec<String>>();
+        Self { lvs, cur_idx: 0 }
+    }
+}
+
 const FLOOR_H: f32 = 20.0;
 const JUMP_SPEED: f32 = 600.0;
 const GRAVITY: f32 = 1300.0;
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const BALL_SIZE: f32 = 30.0;
+const LV_DATA_PATH: &str = "level_data";
 
 impl LevelData {
     fn from_file(path: impl AsRef<Path>) -> Self {
@@ -378,7 +395,11 @@ fn game_pause_play(
     }
 }
 
-fn spawn_main_menu(mut cmd: Commands) {
+fn setup(mut cmd: Commands, lvs: Res<CurLevel>) {
+    spawn_main_menu(&mut cmd);
+}
+
+fn spawn_main_menu(cmd: &mut Commands) {
     cmd.spawn(Camera2d::default());
     let btn_bundle = (
         Button,
