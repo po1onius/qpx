@@ -12,6 +12,7 @@ use std::path::Path;
 fn main() -> AppExit {
     App::new()
         .insert_resource(CurLevel::default())
+        .insert_resource(LevelData::default())
         .insert_resource(IdxEntityPair::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -43,6 +44,8 @@ fn main() -> AppExit {
                 game_pause_play.run_if(input_just_pressed(KeyCode::Escape)),
                 start_playing.run_if(input_just_pressed(KeyCode::Enter)),
                 start_button_action.run_if(in_state(GameState::Main)),
+                select_lv_left_button_action.run_if(in_state(GameState::Main)),
+                select_lv_right_button_action.run_if(in_state(GameState::Main)),
             ),
         )
         .run()
@@ -98,6 +101,9 @@ struct ReturnMainMenuButton;
 #[derive(Component)]
 struct MainUIEntity;
 
+#[derive(Component)]
+struct CurLvLabel;
+
 #[derive(Deserialize)]
 struct LevelDataOrigin {
     data: Vec<Vec<f32>>,
@@ -108,7 +114,7 @@ enum MapItemData {
     Rect(Vec4),
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct LevelData {
     data: Vec<MapItemData>,
 }
@@ -121,8 +127,15 @@ struct IdxEntityPair {
 #[derive(Resource)]
 struct CurLevel {
     lvs: Vec<String>,
-    cur_idx: u32,
+    cur_idx: usize,
 }
+
+const FLOOR_H: f32 = 20.0;
+const JUMP_SPEED: f32 = 600.0;
+const GRAVITY: f32 = 1300.0;
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const BALL_SIZE: f32 = 30.0;
+const LV_DATA_PATH: &str = "level_data";
 
 impl Default for CurLevel {
     fn default() -> Self {
@@ -133,13 +146,6 @@ impl Default for CurLevel {
         Self { lvs, cur_idx: 0 }
     }
 }
-
-const FLOOR_H: f32 = 20.0;
-const JUMP_SPEED: f32 = 600.0;
-const GRAVITY: f32 = 1300.0;
-const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
-const BALL_SIZE: f32 = 30.0;
-const LV_DATA_PATH: &str = "level_data";
 
 impl LevelData {
     fn from_file(path: impl AsRef<Path>) -> Self {
@@ -228,6 +234,7 @@ fn game_init(
         (With<Camera>, Without<RoleSpeed>, Without<MapItem>),
     >,
 ) {
+    info!("game init");
     //let block_texture = asset_server.load("block.png");
     camera_transform.translation.x = 0.0;
     camera_transform.translation.y = 0.0;
@@ -396,10 +403,10 @@ fn game_pause_play(
 }
 
 fn setup(mut cmd: Commands, lvs: Res<CurLevel>) {
-    spawn_main_menu(&mut cmd);
+    spawn_main_menu(&mut cmd, &lvs);
 }
 
-fn spawn_main_menu(cmd: &mut Commands) {
+fn spawn_main_menu(cmd: &mut Commands, lvs: &Res<CurLevel>) {
     cmd.spawn(Camera2d::default());
     let btn_bundle = (
         Button,
@@ -414,7 +421,7 @@ fn spawn_main_menu(cmd: &mut Commands) {
         },
         BackgroundColor(NORMAL_BUTTON),
     );
-    let btn_text_bundle = (
+    let text_bundle = (
         TextFont {
             font_size: 33.0,
             ..default()
@@ -431,30 +438,32 @@ fn spawn_main_menu(cmd: &mut Commands) {
         ..default()
     })
     .with_children(|parent| {
-        for i in ["<", ">", "start"] {
+        for i in ["<", lvs.lvs[lvs.cur_idx].as_str(), ">", "start"] {
             match i {
                 "<" => {
                     parent
                         .spawn((btn_bundle.clone(), LeftSelectButton))
                         .with_children(|parent| {
-                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                            parent.spawn((text_bundle.clone(), Text::new(i)));
                         });
                 }
                 ">" => {
                     parent
                         .spawn((btn_bundle.clone(), RightSelectButton))
                         .with_children(|parent| {
-                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                            parent.spawn((text_bundle.clone(), Text::new(i)));
                         });
                 }
                 "start" => {
                     parent
                         .spawn((btn_bundle.clone(), StartGameButton))
                         .with_children(|parent| {
-                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
+                            parent.spawn((text_bundle.clone(), Text::new(i)));
                         });
                 }
-                _ => (),
+                s => {
+                    parent.spawn((Text::new(s), CurLvLabel, text_bundle.clone()));
+                }
             }
         }
     })
@@ -519,13 +528,51 @@ fn start_button_action(
     start_button: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
     mut next_state: ResMut<NextState<GameState>>,
     main_ui: Single<Entity, With<MainUIEntity>>,
+    lvs: Res<CurLevel>,
+    mut lvd: ResMut<LevelData>,
 ) {
     let Ok(interaction) = start_button.get_single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
+        info!("start game");
         cmd.entity(*main_ui).despawn_recursive();
+        *lvd = LevelData::from_file(&lvs.lvs[lvs.cur_idx]);
         next_state.set(GameState::InitLevel);
+    }
+}
+
+fn select_lv_left_button_action(
+    start_button: Query<&Interaction, (Changed<Interaction>, With<LeftSelectButton>)>,
+    mut lvs: ResMut<CurLevel>,
+    cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
+) {
+    let Ok(interaction) = start_button.get_single() else {
+        return;
+    };
+    if let Interaction::Pressed = interaction {
+        if lvs.cur_idx == 0 {
+            lvs.cur_idx = lvs.lvs.len() - 1;
+        } else {
+            lvs.cur_idx -= 1;
+        }
+        let mut text = cur_lv_text.into_inner();
+        **text = lvs.lvs[lvs.cur_idx].to_string();
+    }
+}
+
+fn select_lv_right_button_action(
+    start_button: Query<&Interaction, (Changed<Interaction>, With<RightSelectButton>)>,
+    mut lvs: ResMut<CurLevel>,
+    cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
+) {
+    let Ok(interaction) = start_button.get_single() else {
+        return;
+    };
+    if let Interaction::Pressed = interaction {
+        lvs.cur_idx = (lvs.cur_idx + 1) % lvs.lvs.len();
+        let mut text = cur_lv_text.into_inner();
+        **text = lvs.lvs[lvs.cur_idx].to_string();
     }
 }
 
