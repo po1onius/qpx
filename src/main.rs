@@ -28,6 +28,8 @@ fn main() -> AppExit {
         .add_systems(Startup, setup)
         .add_systems(OnEnter(GameState::Main), spawn_main_menu)
         .add_systems(OnEnter(GameState::InitLevel), game_init)
+        .add_systems(OnEnter(GameState::Paused), pause_ui)
+        .add_systems(OnExit(GameState::Paused), exit_pause)
         .add_systems(
             Update,
             (
@@ -93,9 +95,6 @@ struct LeftSelectButton;
 
 #[derive(Component)]
 struct RightSelectButton;
-
-#[derive(Component)]
-struct ContinueButton;
 
 #[derive(Component)]
 struct ReturnMainMenuButton;
@@ -395,15 +394,10 @@ fn loop_block(
     }
 }
 
-fn game_pause_play(
-    mut cmd: Commands,
-    state: Res<State<GameState>>,
-    mut nxt_state: ResMut<NextState<GameState>>,
-) {
+fn game_pause_play(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState<GameState>>) {
     match state.get() {
         GameState::Playing => {
             info!("game pause");
-            spawn_pause_ui(&mut cmd);
             nxt_state.set(GameState::Paused);
         }
         GameState::Paused => {
@@ -482,7 +476,7 @@ fn spawn_main_menu(mut cmd: Commands, lvs: Res<CurLevel>) {
     .insert(MainUIEntity);
 }
 
-fn spawn_pause_ui(cmd: &mut Commands) {
+fn pause_ui(mut cmd: Commands) {
     let btn_bundle = (
         Button,
         Node {
@@ -496,7 +490,7 @@ fn spawn_pause_ui(cmd: &mut Commands) {
         },
         BackgroundColor(NORMAL_BUTTON),
     );
-    let btn_text_bundle = (
+    let text_bundle = (
         TextFont {
             font_size: 33.0,
             ..default()
@@ -506,6 +500,7 @@ fn spawn_pause_ui(cmd: &mut Commands) {
 
     cmd.spawn(Node {
         // center button
+        flex_direction: FlexDirection::Column,
         width: Val::Percent(100.),
         height: Val::Percent(100.),
         justify_content: JustifyContent::Center,
@@ -516,10 +511,15 @@ fn spawn_pause_ui(cmd: &mut Commands) {
         parent
             .spawn((btn_bundle.clone(), ReturnMainMenuButton))
             .with_children(|parent| {
-                parent.spawn((btn_text_bundle.clone(), Text::new("return")));
+                parent.spawn((text_bundle.clone(), Text::new("return")));
             });
+        parent.spawn((text_bundle.clone(), Text::new("press ECS to continue")));
     })
     .insert(PauseUIEntity);
+}
+
+fn exit_pause(mut cmd: Commands, pause_ui: Single<Entity, With<PauseUIEntity>>) {
+    cmd.entity(*pause_ui).despawn_recursive();
 }
 
 fn start_button_action(
@@ -581,7 +581,6 @@ fn return_main_ui(
     map_item: Query<Entity, With<MapItem>>,
     role: Single<Entity, With<RoleSpeed>>,
     mut next_state: ResMut<NextState<GameState>>,
-    pause_ui: Single<Entity, With<PauseUIEntity>>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
     let Ok(interaction) = return_btn.get_single() else {
@@ -592,7 +591,6 @@ fn return_main_ui(
             cmd.entity(entity).despawn_recursive();
         }
         cmd.entity(*role).despawn_recursive();
-        cmd.entity(*pause_ui).despawn_recursive();
         lv_idx_entity_paires.pairs.clear();
         next_state.set(GameState::Main);
     }
