@@ -283,22 +283,29 @@ fn collide_events(
     role_entity: Single<Entity, With<RoleState>>,
     floor_entities: Query<(Entity, &MapItem)>,
     mut nxt_state: ResMut<NextState<GameState>>,
+    mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
     for collision_event in collision_events.read() {
         if let CollisionEvent::Started(entity1, entity2, _) = collision_event {
-            if *entity2 == *role_entity {
+            info!("collide: {}, {}", entity1, entity2);
+            if *entity2 == *role_entity || *entity1 == *role_entity {
+                let mut obstacle_entity = entity1;
+                if *entity1 == *role_entity {
+                    obstacle_entity = entity2;
+                }
                 for (entity, map_item) in floor_entities.iter() {
                     if let MapItem::Obstacle = map_item {
-                        if entity == *entity1 {
+                        if entity == *obstacle_entity {
                             //nxt_state.set(GameState::Paused);
                             info!("boom!");
                             for (dee, _) in floor_entities.iter() {
                                 cmd.entity(dee).despawn();
                             }
+                            lv_idx_entity_paires.pairs.clear();
                             cmd.entity(*role_entity).despawn();
                             nxt_state.set(GameState::InitLevel);
-                            break;
+                            return;
                         }
                     }
                 }
