@@ -26,6 +26,7 @@ fn main() -> AppExit {
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
         .add_systems(Startup, setup)
+        .add_systems(OnEnter(GameState::Main), spawn_main_menu)
         .add_systems(OnEnter(GameState::InitLevel), game_init)
         .add_systems(
             Update,
@@ -46,6 +47,7 @@ fn main() -> AppExit {
                 start_button_action.run_if(in_state(GameState::Main)),
                 select_lv_left_button_action.run_if(in_state(GameState::Main)),
                 select_lv_right_button_action.run_if(in_state(GameState::Main)),
+                return_main_ui.run_if(in_state(GameState::Paused)),
             ),
         )
         .run()
@@ -100,6 +102,9 @@ struct ReturnMainMenuButton;
 
 #[derive(Component)]
 struct MainUIEntity;
+
+#[derive(Component)]
+struct PauseUIEntity;
 
 #[derive(Component)]
 struct CurLvLabel;
@@ -409,12 +414,12 @@ fn game_pause_play(
     }
 }
 
-fn setup(mut cmd: Commands, lvs: Res<CurLevel>) {
-    spawn_main_menu(&mut cmd, &lvs);
+fn setup(mut cmd: Commands) {
+    cmd.spawn(Camera2d::default());
+    //spawn_main_menu(cmd, lvs);
 }
 
-fn spawn_main_menu(cmd: &mut Commands, lvs: &Res<CurLevel>) {
-    cmd.spawn(Camera2d::default());
+fn spawn_main_menu(mut cmd: Commands, lvs: Res<CurLevel>) {
     let btn_bundle = (
         Button,
         Node {
@@ -508,26 +513,13 @@ fn spawn_pause_ui(cmd: &mut Commands) {
         ..default()
     })
     .with_children(|parent| {
-        for i in ["continue", "return"] {
-            match i {
-                "continue" => {
-                    parent
-                        .spawn((btn_bundle.clone(), ContinueButton))
-                        .with_children(|parent| {
-                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
-                        });
-                }
-                "return" => {
-                    parent
-                        .spawn((btn_bundle.clone(), ReturnMainMenuButton))
-                        .with_children(|parent| {
-                            parent.spawn((btn_text_bundle.clone(), Text::new(i)));
-                        });
-                }
-                _ => (),
-            }
-        }
-    });
+        parent
+            .spawn((btn_bundle.clone(), ReturnMainMenuButton))
+            .with_children(|parent| {
+                parent.spawn((btn_text_bundle.clone(), Text::new("return")));
+            });
+    })
+    .insert(PauseUIEntity);
 }
 
 fn start_button_action(
@@ -550,11 +542,11 @@ fn start_button_action(
 }
 
 fn select_lv_left_button_action(
-    start_button: Query<&Interaction, (Changed<Interaction>, With<LeftSelectButton>)>,
+    left_select_btn: Query<&Interaction, (Changed<Interaction>, With<LeftSelectButton>)>,
     mut lvs: ResMut<CurLevel>,
     cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
 ) {
-    let Ok(interaction) = start_button.get_single() else {
+    let Ok(interaction) = left_select_btn.get_single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
@@ -569,17 +561,40 @@ fn select_lv_left_button_action(
 }
 
 fn select_lv_right_button_action(
-    start_button: Query<&Interaction, (Changed<Interaction>, With<RightSelectButton>)>,
+    right_select_btn: Query<&Interaction, (Changed<Interaction>, With<RightSelectButton>)>,
     mut lvs: ResMut<CurLevel>,
     cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
 ) {
-    let Ok(interaction) = start_button.get_single() else {
+    let Ok(interaction) = right_select_btn.get_single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
         lvs.cur_idx = (lvs.cur_idx + 1) % lvs.lvs.len();
         let mut text = cur_lv_text.into_inner();
         **text = lvs.lvs[lvs.cur_idx].to_string();
+    }
+}
+
+fn return_main_ui(
+    mut cmd: Commands,
+    return_btn: Query<&Interaction, (Changed<Interaction>, With<ReturnMainMenuButton>)>,
+    map_item: Query<Entity, With<MapItem>>,
+    role: Single<Entity, With<RoleSpeed>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    pause_ui: Single<Entity, With<PauseUIEntity>>,
+    mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
+) {
+    let Ok(interaction) = return_btn.get_single() else {
+        return;
+    };
+    if let Interaction::Pressed = interaction {
+        for entity in &map_item {
+            cmd.entity(entity).despawn_recursive();
+        }
+        cmd.entity(*role).despawn_recursive();
+        cmd.entity(*pause_ui).despawn_recursive();
+        lv_idx_entity_paires.pairs.clear();
+        next_state.set(GameState::Main);
     }
 }
 
