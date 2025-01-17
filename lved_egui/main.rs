@@ -22,19 +22,40 @@ struct EditRect {
     is_editing: Option<EditOption>, // 当前正在调整的边框
 }
 
+struct EditTri {
+    tri_points: [egui::Pos2; 3],
+}
+
+enum EditItem {
+    Rect(EditRect),
+    Tri(EditTri),
+}
+
 impl Default for EditRect {
     fn default() -> Self {
         Self {
-            rect_pos: egui::Pos2 { x: 30.0, y: 30.0 },
-            rect_size: egui::Vec2 { x: 30.0, y: 30.0 },
+            rect_pos: egui::Pos2 { x: 100.0, y: 100.0 },
+            rect_size: egui::Vec2 { x: 100.0, y: 100.0 },
             is_editing: None,
+        }
+    }
+}
+
+impl Default for EditTri {
+    fn default() -> Self {
+        Self {
+            tri_points: [
+                egui::Pos2::new(30.0, 30.0),
+                egui::Pos2::new(45.0, 60.0),
+                egui::Pos2::new(60.0, 30.0),
+            ],
         }
     }
 }
 
 #[derive(Default)]
 struct LevelEditor {
-    rects: Vec<EditRect>,
+    items: Vec<EditItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -58,16 +79,29 @@ impl LevelEditor {
         let data_str_res = read_to_string(path);
         if let Ok(data_str) = data_str_res {
             let lv_data: LevelData = toml::from_str(&data_str).unwrap();
-            let mut rects = Vec::new();
+            let mut items = Vec::new();
             for i in lv_data.data.iter() {
-                let rect = EditRect {
-                    rect_pos: egui::Pos2 { x: i[0], y: i[1] },
-                    rect_size: egui::Vec2::new(i[2], i[3]),
-                    is_editing: None,
-                };
-                rects.push(rect);
+                if i.len() == 6 {
+                    let tri = EditTri {
+                        tri_points: [
+                            egui::Pos2::new(i[0], i[1]),
+                            egui::Pos2::new(i[2], i[3]),
+                            egui::Pos2::new(i[4], i[5]),
+                        ],
+                    };
+                    items.push(EditItem::Tri(tri));
+                } else if i.len() == 4 {
+                    let rect = EditRect {
+                        rect_pos: egui::Pos2 { x: i[0], y: i[1] },
+                        rect_size: egui::Vec2::new(i[2], i[3]),
+                        is_editing: None,
+                    };
+                    items.push(EditItem::Rect(rect));
+                } else {
+                    panic!();
+                }
             }
-            Self { rects }
+            Self { items }
         } else {
             return Self::default();
         }
@@ -77,7 +111,7 @@ impl LevelEditor {
 impl EditRect {
     fn spawn_rect(&mut self, ui: &mut egui::Ui) {
         let rect = egui::Rect::from_min_size(self.rect_pos, self.rect_size);
-        let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+        //let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
         // 绘制矩形
         ui.painter().rect_stroke(
@@ -93,38 +127,46 @@ impl EditRect {
             self.rect_pos.x += 10.0; // 按下右键，向右移动
         }
 
-        // 检测鼠标是否在边框附近
         let mouse_pos = ui.input(|i| i.pointer.interact_pos());
         if let Some(mouse_pos) = mouse_pos {
             let mut hold = None;
-
-            // 检测左、右、上、下边框
-            if (mouse_pos.x - rect.min.x).abs() < EDGE_THRESHOLD
-                && rect.max.y > mouse_pos.y
-                && rect.min.y < mouse_pos.y
-            {
-                hold = Some(EditOption::Left);
-            } else if (mouse_pos.x - rect.max.x).abs() < EDGE_THRESHOLD
-                && rect.max.y > mouse_pos.y
-                && rect.min.y < mouse_pos.y
-            {
-                hold = Some(EditOption::Right);
-            } else if (mouse_pos.y - rect.min.y).abs() < EDGE_THRESHOLD
-                && rect.max.x > mouse_pos.x
-                && rect.min.x < mouse_pos.x
-            {
-                hold = Some(EditOption::Top);
-            } else if (mouse_pos.y - rect.max.y).abs() < EDGE_THRESHOLD
-                && rect.max.x > mouse_pos.x
-                && rect.min.x < mouse_pos.x
-            {
-                hold = Some(EditOption::Bottom);
-            } else if rect.contains(mouse_pos) {
-                hold = Some(EditOption::Pos(mouse_pos - self.rect_pos));
+            if self.is_editing.is_none() {
+                // 检测左、右、上、下边框
+                if (mouse_pos.x - rect.min.x).abs() < EDGE_THRESHOLD
+                    && rect.max.y > mouse_pos.y
+                    && rect.min.y < mouse_pos.y
+                {
+                    hold = Some(EditOption::Left);
+                } else if (mouse_pos.x - rect.max.x).abs() < EDGE_THRESHOLD
+                    && rect.max.y > mouse_pos.y
+                    && rect.min.y < mouse_pos.y
+                {
+                    hold = Some(EditOption::Right);
+                } else if (mouse_pos.y - rect.min.y).abs() < EDGE_THRESHOLD
+                    && rect.max.x > mouse_pos.x
+                    && rect.min.x < mouse_pos.x
+                {
+                    hold = Some(EditOption::Top);
+                } else if (mouse_pos.y - rect.max.y).abs() < EDGE_THRESHOLD
+                    && rect.max.x > mouse_pos.x
+                    && rect.min.x < mouse_pos.x
+                {
+                    hold = Some(EditOption::Bottom);
+                } else if rect.contains(mouse_pos) {
+                    hold = Some(EditOption::Pos(mouse_pos - self.rect_pos));
+                }
             }
+            ui.input(|i| {
+                if i.pointer.button_pressed(egui::PointerButton::Primary) {
+                    self.is_editing = hold;
+                }
+                if i.pointer.button_released(egui::PointerButton::Primary) {
+                    self.is_editing = None;
+                }
+            });
 
             // 更新光标图标
-            if let Some(edge) = hold {
+            if let Some(edge) = self.is_editing {
                 let cursor_icon = match edge {
                     EditOption::Left | EditOption::Right => egui::CursorIcon::ResizeHorizontal,
                     EditOption::Top | EditOption::Bottom => egui::CursorIcon::ResizeVertical,
@@ -134,9 +176,6 @@ impl EditRect {
             }
 
             // 开始调整大小
-            if response.drag_started() {
-                self.is_editing = hold;
-            }
 
             // 调整矩形大小
             if let Some(edge) = self.is_editing {
@@ -149,6 +188,7 @@ impl EditRect {
                         }
                     }
                     EditOption::Right => {
+                        println!("drag right");
                         let width = mouse_pos.x - rect.min.x;
                         if width > 0.0 {
                             self.rect_size.x = width;
@@ -176,11 +216,16 @@ impl EditRect {
                 }
             }
         }
+    }
+}
 
-        // 结束调整大小
-        if response.drag_stopped() {
-            self.is_editing = None;
-        }
+impl EditTri {
+    fn spawn_tri(&mut self, ui: &mut egui::Ui) {
+        ui.painter().add(egui::Shape::convex_polygon(
+            self.tri_points.to_vec(),
+            egui::Color32::LIGHT_BLUE,
+            egui::Stroke::new(2.0, egui::Color32::BLACK),
+        ));
     }
 }
 
@@ -189,17 +234,32 @@ impl eframe::App for LevelEditor {
         egui::CentralPanel::default().show(ctx, |ui| {
             if ui.button("spawn rect").clicked() {
                 let rect = EditRect::default();
-                self.rects.push(rect);
+                self.items.push(EditItem::Rect(rect));
+            }
+
+            if ui.button("spawn tri").clicked() {
+                let tri = EditTri::default();
+                self.items.push(EditItem::Tri(tri));
             }
 
             let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
-                for rect in self.rects.iter() {
+                for item in self.items.iter() {
                     let mut vt = Vec::new();
-                    vt.push(rect.rect_pos.x);
-                    vt.push(rect.rect_pos.y);
-                    vt.push(rect.rect_size.x);
-                    vt.push(rect.rect_size.y);
+                    match item {
+                        EditItem::Rect(rect) => {
+                            vt.push(rect.rect_pos.x);
+                            vt.push(rect.rect_pos.y);
+                            vt.push(rect.rect_size.x);
+                            vt.push(rect.rect_size.y);
+                        }
+                        EditItem::Tri(tri) => {
+                            for i in tri.tri_points {
+                                vt.push(i.x);
+                                vt.push(i.y);
+                            }
+                        }
+                    }
                     lv_data_ori.data.push(vt);
                 }
 
@@ -226,8 +286,15 @@ impl eframe::App for LevelEditor {
                 let s = toml::to_string(&lv_data_ori).unwrap();
                 let _ = file.write_all(s.as_bytes());
             }
-            for rect in self.rects.iter_mut() {
-                rect.spawn_rect(ui);
+            for item in self.items.iter_mut() {
+                match item {
+                    EditItem::Rect(rect) => {
+                        rect.spawn_rect(ui);
+                    }
+                    EditItem::Tri(tri) => {
+                        tri.spawn_tri(ui);
+                    }
+                }
             }
         });
     }
