@@ -26,10 +26,11 @@ fn main() -> AppExit {
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
         .add_systems(Startup, setup)
-        .add_systems(OnEnter(GameState::Main), spawn_main_menu)
+        .add_systems(OnEnter(GameState::Main), main_ui)
         .add_systems(OnEnter(GameState::InitLevel), game_init)
+        .add_systems(OnExit(GameState::Main), leave_main)
         .add_systems(OnEnter(GameState::Paused), pause_ui)
-        .add_systems(OnExit(GameState::Paused), exit_pause)
+        .add_systems(OnExit(GameState::Paused), leave_pause)
         .add_systems(
             Update,
             (
@@ -413,7 +414,7 @@ fn setup(mut cmd: Commands) {
     //spawn_main_menu(cmd, lvs);
 }
 
-fn spawn_main_menu(mut cmd: Commands, lvs: Res<CurLevel>) {
+fn main_ui(mut cmd: Commands, lvs: Res<CurLevel>) {
     let btn_bundle = (
         Button,
         Node {
@@ -518,15 +519,17 @@ fn pause_ui(mut cmd: Commands) {
     .insert(PauseUIEntity);
 }
 
-fn exit_pause(mut cmd: Commands, pause_ui: Single<Entity, With<PauseUIEntity>>) {
+fn leave_pause(mut cmd: Commands, pause_ui: Single<Entity, With<PauseUIEntity>>) {
     cmd.entity(*pause_ui).despawn_recursive();
 }
 
+fn leave_main(mut cmd: Commands, main_ui: Single<Entity, With<MainUIEntity>>) {
+    cmd.entity(*main_ui).despawn_recursive();
+}
+
 fn start_button_action(
-    mut cmd: Commands,
     start_button: Query<&Interaction, (Changed<Interaction>, With<StartGameButton>)>,
     mut next_state: ResMut<NextState<GameState>>,
-    main_ui: Single<Entity, With<MainUIEntity>>,
     lvs: Res<CurLevel>,
     mut lvd: ResMut<LevelData>,
 ) {
@@ -535,7 +538,6 @@ fn start_button_action(
     };
     if let Interaction::Pressed = interaction {
         info!("start game");
-        cmd.entity(*main_ui).despawn_recursive();
         *lvd = LevelData::from_file(&lvs.lvs[lvs.cur_idx]);
         next_state.set(GameState::InitLevel);
     }
