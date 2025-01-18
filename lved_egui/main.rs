@@ -48,7 +48,7 @@ impl Default for EditTri {
         Self {
             tri_points: [
                 egui::Pos2::new(130.0, 130.0),
-                egui::Pos2::new(145.0, 180.0),
+                egui::Pos2::new(160.0, 180.0),
                 egui::Pos2::new(190.0, 130.0),
             ],
             is_editing: None,
@@ -306,7 +306,11 @@ impl EditTri {
                         self.tri_points[1].y = mouse_pos.y;
                     }
                     EditOptionTri::Right => {
-                        self.tri_points[2].x = mouse_pos.x;
+                        if mouse_pos.x > self.tri_points[0].x + 10.0 {
+                            self.tri_points[2].x = mouse_pos.x;
+                        }
+                        self.tri_points[1].x = (self.tri_points[2].x - self.tri_points[0].x) / 2.0
+                            + self.tri_points[0].x;
                     }
                 }
             }
@@ -387,10 +391,18 @@ impl eframe::App for LevelEditor {
 
 fn egui2bevy(ld: &mut LevelData) {
     for i in ld.data.iter_mut() {
-        i[0] = i[0] + i[2] / 2.0;
-        i[1] = i[1] + i[3] / 2.0;
-        i[1] = 720.0 - i[1] - 360.0;
-        i[2] /= 2.0;
-        i[3] /= 2.0;
+        if i.len() == 4 {
+            i[0] = i[0] + i[2] / 2.0;
+            i[1] = i[1] + i[3] / 2.0;
+            i[1] = 720.0 - i[1] - 360.0;
+            i[2] /= 2.0;
+            i[3] /= 2.0;
+        } else if i.len() == 6 {
+            i[1] = 720.0 - i[1] - 360.0;
+            i[3] = 720.0 - i[3] - 360.0;
+            i[5] = 720.0 - i[5] - 360.0;
+        } else {
+            panic!();
+        }
     }
 }
