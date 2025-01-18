@@ -1,5 +1,6 @@
 use eframe::egui;
 use std::{
+    collections::HashMap,
     fs::{read_to_string, OpenOptions},
     io::Write,
     path::Path,
@@ -24,6 +25,7 @@ struct EditRect {
 
 struct EditTri {
     tri_points: [egui::Pos2; 3],
+    is_editing: Option<EditOptionTri>,
 }
 
 enum EditItem {
@@ -45,10 +47,11 @@ impl Default for EditTri {
     fn default() -> Self {
         Self {
             tri_points: [
-                egui::Pos2::new(30.0, 30.0),
-                egui::Pos2::new(45.0, 60.0),
-                egui::Pos2::new(60.0, 30.0),
+                egui::Pos2::new(130.0, 130.0),
+                egui::Pos2::new(145.0, 180.0),
+                egui::Pos2::new(190.0, 130.0),
             ],
+            is_editing: None,
         }
     }
 }
@@ -72,6 +75,13 @@ enum EditOption {
     Pos(egui::Vec2),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EditOptionTri {
+    Left(egui::Vec2),
+    Mid,
+    Right,
+}
+
 const EDGE_THRESHOLD: f32 = 10.0;
 
 impl LevelEditor {
@@ -88,6 +98,7 @@ impl LevelEditor {
                             egui::Pos2::new(i[2], i[3]),
                             egui::Pos2::new(i[4], i[5]),
                         ],
+                        is_editing: None,
                     };
                     items.push(EditItem::Tri(tri));
                 } else if i.len() == 4 {
@@ -226,6 +237,80 @@ impl EditTri {
             egui::Color32::LIGHT_BLUE,
             egui::Stroke::new(2.0, egui::Color32::BLACK),
         ));
+
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            for i in self.tri_points.iter_mut() {
+                i.x -= 10.0;
+            }
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            for i in self.tri_points.iter_mut() {
+                i.x += 10.0;
+            }
+        }
+
+        let mouse_pos = ui.input(|i| i.pointer.interact_pos());
+        if let Some(mouse_pos) = mouse_pos {
+            let mut hold = None;
+            let m = HashMap::from([
+                (0, EditOptionTri::Left(egui::Vec2::default())),
+                (1, EditOptionTri::Mid),
+                (2, EditOptionTri::Right),
+            ]);
+            if self.is_editing.is_none() {
+                for (j, i) in self.tri_points.iter().enumerate() {
+                    let x = (i.x - mouse_pos.x).abs();
+                    let y = (i.y - mouse_pos.y).abs();
+                    if (x * x + y * y).sqrt() < EDGE_THRESHOLD {
+                        hold = Some(m[&j]);
+                        break;
+                    }
+                }
+            }
+            ui.input(|i| {
+                if i.pointer.button_pressed(egui::PointerButton::Primary) {
+                    if let Some(EditOptionTri::Left(_)) = hold {
+                        self.is_editing = Some(EditOptionTri::Left(mouse_pos - self.tri_points[0]))
+                    } else {
+                        self.is_editing = hold;
+                    }
+                }
+                if i.pointer.button_released(egui::PointerButton::Primary) {
+                    self.is_editing = None;
+                }
+            });
+
+            // 更新光标图标
+            //if let Some(edge) = self.is_editing {
+            //    let cursor_icon = match edge {
+            //        EditOption::Left | EditOption::Right => egui::CursorIcon::ResizeHorizontal,
+            //        EditOption::Top | EditOption::Bottom => egui::CursorIcon::ResizeVertical,
+            //        EditOption::Pos(_) => egui::CursorIcon::Move,
+            //    };
+            //    ui.output_mut(|o| o.cursor_icon = cursor_icon);
+            //}
+
+            // 开始调整大小
+
+            // 调整矩形大小
+            if let Some(edge) = &self.is_editing {
+                match edge {
+                    EditOptionTri::Left(fix_pos) => {
+                        let mid_fix_pos = self.tri_points[1] - self.tri_points[0];
+                        let right_fix_pos = self.tri_points[2] - self.tri_points[0];
+                        self.tri_points[0] = mouse_pos - *fix_pos;
+                        self.tri_points[1] = self.tri_points[0] + mid_fix_pos;
+                        self.tri_points[2] = self.tri_points[0] + right_fix_pos;
+                    }
+                    EditOptionTri::Mid => {
+                        self.tri_points[1].y = mouse_pos.y;
+                    }
+                    EditOptionTri::Right => {
+                        self.tri_points[2].x = mouse_pos.x;
+                    }
+                }
+            }
+        }
     }
 }
 
