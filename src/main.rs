@@ -9,19 +9,31 @@ use std::collections::HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::Path;
 
+const FLOOR_H: f32 = 20.0;
+const JUMP_SPEED: f32 = 600.0;
+const GRAVITY: f32 = 1300.0;
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+const BALL_SIZE: f32 = 30.0;
+const LV_DATA_PATH: &str = "level_data";
+const WINDOW_RESOLUTION_X: f32 = 1280.0;
+const WINDOW_RESOLUTION_Y: f32 = 720.0;
+
 fn main() -> AppExit {
     App::new()
         .insert_resource(CurLevel::default())
         .insert_resource(LevelData::default())
         .insert_resource(IdxEntityPair::default())
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: WindowResolution::new(1280.0, 720.0).with_scale_factor_override(1.0),
-                resizable: false,
+        .add_plugins(
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: WindowResolution::new(WINDOW_RESOLUTION_X, WINDOW_RESOLUTION_Y)
+                        .with_scale_factor_override(1.0),
+                    resizable: false,
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+        )
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugins(RapierDebugRenderPlugin::default())
         .init_state::<GameState>()
@@ -135,13 +147,6 @@ struct CurLevel {
     cur_idx: usize,
 }
 
-const FLOOR_H: f32 = 20.0;
-const JUMP_SPEED: f32 = 600.0;
-const GRAVITY: f32 = 1300.0;
-const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
-const BALL_SIZE: f32 = 30.0;
-const LV_DATA_PATH: &str = "level_data";
-
 impl Default for CurLevel {
     fn default() -> Self {
         let dirs = read_dir(LV_DATA_PATH).unwrap();
@@ -189,10 +194,16 @@ impl MapItemBundle {
     }
 
     fn tri_obstacle(tri: &Triangle2d) -> Self {
+        info!("spawn tri: {} {}", tri.vertices[0].x, tri.vertices[0].y);
         Self {
             rigid: RigidBody::Fixed,
-            collider: Collider::triangle(tri.vertices[0], tri.vertices[1], tri.vertices[2]),
-            position: Transform::from_xyz(tri.vertices[0].x, tri.vertices[1].y, 0.0),
+            //collider: Collider::triangle(tri.vertices[0], tri.vertices[1], tri.vertices[2]),
+            collider: Collider::triangle(
+                Vec2 { x: 0.0, y: 0.0 },
+                tri.vertices[1] - tri.vertices[0],
+                tri.vertices[2] - tri.vertices[0],
+            ),
+            position: Transform::from_xyz(tri.vertices[0].x, tri.vertices[0].y, 0.0),
             map_item: MapItem::Obstacle,
         }
     }
@@ -245,15 +256,18 @@ fn game_init(
     camera_transform.translation.y = 0.0;
 
     for (i, l) in level_data.data.iter().enumerate() {
-        if i > 1 {
-            break;
-        }
         match l {
             MapItemData::Rect(rect) => {
-                spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                let lpx = rect.x - rect.z;
+                if lpx > -(WINDOW_RESOLUTION_X / 2.0) && lpx < WINDOW_RESOLUTION_X / 2.0 {
+                    spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                }
             }
             MapItemData::Tri(tri) => {
-                spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
+                let lpx = tri.vertices[0].x;
+                if lpx > -(WINDOW_RESOLUTION_X / 2.0) && lpx < WINDOW_RESOLUTION_X / 2.0 {
+                    spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
+                }
             }
         }
     }
@@ -382,10 +396,10 @@ fn loop_block(
                 }
             }
             MapItemData::Tri(tri) => {
-                if camera_transform.translation.x - tri.vertices[2][0] > 500.0 {
+                if camera_transform.translation.x - tri.vertices[2].x > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
-                let ng = tri.vertices[0][0] - camera_transform.translation.x;
+                let ng = tri.vertices[0].x - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
                     spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
