@@ -11,6 +11,7 @@ use std::path::Path;
 
 const FLOOR_H: f32 = 20.0;
 const JUMP_SPEED: f32 = 600.0;
+const ROLE_SPEED: f32 = 300.0;
 const GRAVITY: f32 = 1300.0;
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 const BALL_SIZE: f32 = 30.0;
@@ -82,7 +83,7 @@ struct RoleSpeed(f32, f32);
 
 #[derive(Component)]
 enum RoleState {
-    Air,
+    Air(u32),
     Normal,
 }
 
@@ -281,15 +282,15 @@ fn game_init(
         Friction::coefficient(0.0),
         ActiveEvents::COLLISION_EVENTS,
         //Sprite::from_image(asset_server.load("block.png")),
-        RoleState::Air,
-        RoleSpeed(300.0, 0.0),
+        RoleState::Air(999),
+        RoleSpeed(ROLE_SPEED, 0.0),
         Transform::from_xyz(-100.0, 200.0, 0.0),
     ));
 }
 
 fn gravity(role_sv: Single<(&mut RoleSpeed, &RoleState)>, time: Res<Time>) {
     let (mut role_speed, role_state) = role_sv.into_inner();
-    if let RoleState::Air = *role_state {
+    if let RoleState::Air(_) = *role_state {
         role_speed.1 -= GRAVITY * time.delta_secs();
     }
 }
@@ -300,7 +301,7 @@ fn collide_events(
     mut collision_events: EventReader<CollisionEvent>,
     role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
     role_entity: Single<Entity, With<RoleState>>,
-    floor_entities: Query<(Entity, &MapItem)>,
+    map_item_entities: Query<(Entity, &MapItem)>,
     mut nxt_state: ResMut<NextState<GameState>>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
@@ -313,12 +314,12 @@ fn collide_events(
                 if *entity1 == *role_entity {
                     obstacle_entity = entity2;
                 }
-                for (entity, map_item) in floor_entities.iter() {
+                for (entity, map_item) in map_item_entities.iter() {
                     if let MapItem::Obstacle = map_item {
                         if entity == *obstacle_entity {
                             //nxt_state.set(GameState::Paused);
                             info!("boom!");
-                            for (dee, _) in floor_entities.iter() {
+                            for (dee, _) in map_item_entities.iter() {
                                 cmd.entity(dee).despawn();
                             }
                             lv_idx_entity_paires.pairs.clear();
@@ -333,18 +334,40 @@ fn collide_events(
             *role_state = RoleState::Normal;
             role_speed.1 = 0.0;
         }
-        if let CollisionEvent::Stopped(..) = collision_event {
-            *role_state = RoleState::Air;
+        if let CollisionEvent::Stopped(entity1, entity2, _) = collision_event {
+            info!("-----------collide: {}, {}", entity1, entity2);
+            if *entity2 == *role_entity || *entity1 == *role_entity {
+                let mut obstacle_entity = entity1;
+                if *entity1 == *role_entity {
+                    obstacle_entity = entity2;
+                }
+                for (entity, map_item) in map_item_entities.iter() {
+                    if let MapItem::Obstacle = map_item {
+                        if entity == *obstacle_entity {
+                            info!("-----------!!!!!!!!!!!!------------");
+                            return;
+                        }
+                    }
+                }
+            }
+            //*role_state = RoleState::Air(0);
         }
     }
 }
 
 fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
-    if let RoleState::Normal = *role_state {
-        *role_state = RoleState::Air;
-        role_speed.1 += JUMP_SPEED;
+    if let RoleState::Air(jn) = *role_state {
+        info!("jump times {}", jn);
+        if jn == 0 {
+            return;
+        } else {
+            *role_state = RoleState::Air(jn - 1);
+        }
+    } else {
+        *role_state = RoleState::Air(0);
     }
+    role_speed.1 += JUMP_SPEED;
 }
 
 fn role_move(
