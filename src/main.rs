@@ -51,7 +51,6 @@ fn main() -> AppExit {
                 jump.run_if(input_just_pressed(KeyCode::Space)),
                 role_move,
                 loop_block,
-                collide_events,
             )
                 .run_if(in_state(GameState::Playing)),
         )
@@ -65,6 +64,10 @@ fn main() -> AppExit {
                 select_lv_right_button_action.run_if(in_state(GameState::Main)),
                 return_main_ui.run_if(in_state(GameState::Paused)),
             ),
+        )
+        .add_systems(
+            Update,
+            collide_events.run_if(in_state(GameState::InitLevel).or(in_state(GameState::Playing))),
         )
         .run()
 }
@@ -303,6 +306,7 @@ fn collide_events(
     role_entity: Single<Entity, With<RoleState>>,
     map_item_entities: Query<(Entity, &MapItem)>,
     mut nxt_state: ResMut<NextState<GameState>>,
+    state: Res<State<GameState>>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
     let (mut role_speed, mut role_state) = role_sv.into_inner();
@@ -334,23 +338,12 @@ fn collide_events(
             *role_state = RoleState::Normal;
             role_speed.1 = 0.0;
         }
-        if let CollisionEvent::Stopped(entity1, entity2, _) = collision_event {
-            info!("-----------collide: {}, {}", entity1, entity2);
-            if *entity2 == *role_entity || *entity1 == *role_entity {
-                let mut obstacle_entity = entity1;
-                if *entity1 == *role_entity {
-                    obstacle_entity = entity2;
-                }
-                for (entity, map_item) in map_item_entities.iter() {
-                    if let MapItem::Obstacle = map_item {
-                        if entity == *obstacle_entity {
-                            info!("-----------!!!!!!!!!!!!------------");
-                            return;
-                        }
-                    }
-                }
+        if let CollisionEvent::Stopped(..) = collision_event {
+            if let GameState::Playing = state.get() {
+                *role_state = RoleState::Air(0);
+            } else {
+                info!("swallow after boom");
             }
-            //*role_state = RoleState::Air(0);
         }
     }
 }
