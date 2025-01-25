@@ -28,9 +28,16 @@ struct EditTri {
     is_editing: Option<EditOptionTri>,
 }
 
+struct EditCircle {
+    circle_pos: egui::Pos2,
+    radius: f32,
+    is_editing: Option<EditOptionCircle>,
+}
+
 enum EditItem {
     Rect(EditRect),
     Tri(EditTri),
+    Circle(EditCircle),
 }
 
 impl Default for EditRect {
@@ -51,6 +58,16 @@ impl Default for EditTri {
                 egui::Pos2::new(160.0, 180.0),
                 egui::Pos2::new(190.0, 130.0),
             ],
+            is_editing: None,
+        }
+    }
+}
+
+impl Default for EditCircle {
+    fn default() -> Self {
+        Self {
+            circle_pos: egui::Pos2::new(100.0, 100.0),
+            radius: 30.0,
             is_editing: None,
         }
     }
@@ -80,6 +97,12 @@ enum EditOptionTri {
     Left(egui::Vec2),
     Mid,
     Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EditOptionCircle {
+    Pos(egui::Vec2),
+    Radius,
 }
 
 const EDGE_THRESHOLD: f32 = 10.0;
@@ -115,6 +138,57 @@ impl LevelEditor {
             Self { items }
         } else {
             return Self::default();
+        }
+    }
+}
+
+impl EditCircle {
+    fn spawn_circle(&mut self, ui: &mut egui::Ui) {
+        ui.painter().circle_stroke(
+            self.circle_pos,
+            self.radius,
+            egui::Stroke::new(2.0, egui::Color32::WHITE),
+        );
+
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            self.circle_pos.x -= 10.0; // 按下左键，向左移动
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            self.circle_pos.x += 10.0; // 按下右键，向右移动
+        }
+
+        let mouse_pos = ui.input(|i| i.pointer.interact_pos());
+        if let Some(mouse_pos) = mouse_pos {
+            let mut hold = None;
+            if self.is_editing.is_none() {
+                if (mouse_pos.distance(self.circle_pos) - self.radius).abs() < EDGE_THRESHOLD {
+                    hold = Some(EditOptionCircle::Radius);
+                } else if mouse_pos.distance(self.circle_pos) < EDGE_THRESHOLD {
+                    hold = Some(EditOptionCircle::Pos(mouse_pos - self.circle_pos))
+                }
+            }
+            ui.input(|i| {
+                if i.pointer.button_pressed(egui::PointerButton::Primary) {
+                    self.is_editing = hold;
+                }
+                if i.pointer.button_released(egui::PointerButton::Primary) {
+                    self.is_editing = None;
+                }
+            });
+
+            if let Some(edge) = self.is_editing {
+                match edge {
+                    EditOptionCircle::Radius => {
+                        self.radius = mouse_pos.distance(self.circle_pos);
+                    }
+                    EditOptionCircle::Pos(move_fix) => {
+                        //if ui.input(|i| i.pointer.primary_down()) {
+                        // 更新矩形位置为鼠标位置
+                        self.circle_pos = mouse_pos - move_fix; // - self.rect_pos.to_vec2();
+                                                                //}
+                    }
+                }
+            }
         }
     }
 }
@@ -199,7 +273,6 @@ impl EditRect {
                         }
                     }
                     EditOption::Right => {
-                        println!("drag right");
                         let width = mouse_pos.x - rect.min.x;
                         if width > 0.0 {
                             self.rect_size.x = width;
@@ -331,6 +404,11 @@ impl eframe::App for LevelEditor {
                 self.items.push(EditItem::Tri(tri));
             }
 
+            if ui.button("spawn circle").clicked() {
+                let circle = EditCircle::default();
+                self.items.push(EditItem::Circle(circle));
+            }
+
             let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
                 for item in self.items.iter() {
@@ -347,6 +425,11 @@ impl eframe::App for LevelEditor {
                                 vt.push(i.x);
                                 vt.push(i.y);
                             }
+                        }
+                        EditItem::Circle(circle) => {
+                            vt.push(circle.circle_pos.x);
+                            vt.push(circle.circle_pos.y);
+                            vt.push(circle.radius);
                         }
                     }
                     lv_data_ori.data.push(vt);
@@ -383,6 +466,9 @@ impl eframe::App for LevelEditor {
                     EditItem::Tri(tri) => {
                         tri.spawn_tri(ui);
                     }
+                    EditItem::Circle(circle) => {
+                        circle.spawn_circle(ui);
+                    }
                 }
             }
         });
@@ -401,6 +487,8 @@ fn egui2bevy(ld: &mut LevelData) {
             i[1] = 720.0 - i[1] - 360.0;
             i[3] = 720.0 - i[3] - 360.0;
             i[5] = 720.0 - i[5] - 360.0;
+        } else if i.len() == 3 {
+            i[1] = 720.0 - i[1] - 360.0;
         } else {
             panic!();
         }
