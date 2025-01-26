@@ -102,6 +102,7 @@ struct MapItemBundle {
 enum MapItem {
     Obstacle,
     Normal,
+    DoubleJump,
 }
 
 #[derive(Component)]
@@ -133,6 +134,7 @@ struct LevelDataOrigin {
 enum MapItemData {
     Tri(Triangle2d),
     Rect(Vec4),
+    Circle(Vec2, f32),
 }
 
 #[derive(Resource, Default)]
@@ -175,6 +177,8 @@ impl LevelData {
                     Vec2::new(v[2], v[3]),
                     Vec2::new(v[4], v[5]),
                 )));
+            } else if v.len() == 3 {
+                data.push(MapItemData::Circle(Vec2::new(v[0], v[1]), v[2]));
             } else {
                 panic!();
             }
@@ -211,6 +215,16 @@ impl MapItemBundle {
             map_item: MapItem::Obstacle,
         }
     }
+
+    fn circle_double_jump(pos: &Vec2, radius: f32) -> Self {
+        info!("spawn circle");
+        Self {
+            rigid: RigidBody::Fixed,
+            collider: Collider::ball(radius),
+            position: Transform::from_xyz(pos.x, pos.y, 0.0),
+            map_item: MapItem::DoubleJump,
+        }
+    }
 }
 
 fn spawn_floor(
@@ -244,6 +258,20 @@ fn spawn_tri_obstacle(
     info!("sapwn: entity {}", id);
 }
 
+fn spawn_circle(
+    cmd: &mut Commands,
+    pos: &Vec2,
+    radius: f32,
+    index: u32,
+    lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+) {
+    let id = cmd
+        .spawn(MapItemBundle::circle_double_jump(pos, radius))
+        .id();
+    lv_idx_entity_paires.pairs.insert(index, (id, None));
+    info!("sapwn: entity {}", id);
+}
+
 fn game_init(
     mut cmd: Commands,
     asset_server: Res<AssetServer>,
@@ -259,18 +287,25 @@ fn game_init(
     camera_transform.translation.x = 0.0;
     camera_transform.translation.y = 0.0;
 
+    let screen_half_x = WINDOW_RESOLUTION_X / 2.0;
+
     for (i, l) in level_data.data.iter().enumerate() {
         match l {
             MapItemData::Rect(rect) => {
                 let lpx = rect.x - rect.z;
-                if lpx > -(WINDOW_RESOLUTION_X / 2.0) && lpx < WINDOW_RESOLUTION_X / 2.0 {
+                if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
                 }
             }
             MapItemData::Tri(tri) => {
                 let lpx = tri.vertices[0].x;
-                if lpx > -(WINDOW_RESOLUTION_X / 2.0) && lpx < WINDOW_RESOLUTION_X / 2.0 {
+                if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
+                }
+            }
+            MapItemData::Circle(pos, radius) => {
+                if pos.x > -screen_half_x && pos.y < screen_half_x {
+                    spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
                 }
             }
         }
@@ -314,29 +349,38 @@ fn collide_events(
         if let CollisionEvent::Started(entity1, entity2, _) = collision_event {
             info!("collide: {}, {}", entity1, entity2);
             if *entity2 == *role_entity || *entity1 == *role_entity {
-                let mut obstacle_entity = entity1;
+                let mut other_entity = entity1;
                 if *entity1 == *role_entity {
-                    obstacle_entity = entity2;
+                    other_entity = entity2;
                 }
                 for (entity, map_item) in map_item_entities.iter() {
-                    if let MapItem::Obstacle = map_item {
-                        if entity == *obstacle_entity {
-                            //nxt_state.set(GameState::Paused);
-                            info!("boom!");
-                            for (dee, _) in map_item_entities.iter() {
-                                cmd.entity(dee).despawn();
+                    if entity == *other_entity {
+                        match map_item {
+                            MapItem::Obstacle => {
+                                //nxt_state.set(GameState::Paused);
+                                info!("boom!");
+                                for (dee, _) in map_item_entities.iter() {
+                                    cmd.entity(dee).despawn();
+                                }
+                                lv_idx_entity_paires.pairs.clear();
+                                cmd.entity(*role_entity).despawn();
+                                nxt_state.set(GameState::InitLevel);
+                                return;
                             }
-                            lv_idx_entity_paires.pairs.clear();
-                            cmd.entity(*role_entity).despawn();
-                            nxt_state.set(GameState::InitLevel);
-                            return;
+                            MapItem::DoubleJump => {
+                                if let RoleState::Air(_) = *role_state {
+                                    *role_state = RoleState::Air(1);
+                                }
+                            }
+                            MapItem::Normal => {
+                                info!("collide floor");
+                                *role_state = RoleState::Normal;
+                                role_speed.1 = 0.0;
+                            }
                         }
                     }
                 }
             }
-            info!("collide floor");
-            *role_state = RoleState::Normal;
-            role_speed.1 = 0.0;
         }
         if let CollisionEvent::Stopped(..) = collision_event {
             if let GameState::Playing = state.get() {
@@ -419,6 +463,16 @@ fn loop_block(
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
                     spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
+                }
+            }
+            MapItemData::Circle(pos, radius) => {
+                if camera_transform.translation.x - pos.x > 500.0 {
+                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
+                }
+                let ng = pos.x - camera_transform.translation.x;
+                if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
+                {
+                    spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
                 }
             }
         }
