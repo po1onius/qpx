@@ -267,6 +267,7 @@ fn spawn_circle(
 ) {
     let id = cmd
         .spawn(MapItemBundle::circle_double_jump(pos, radius))
+        .insert(Sensor)
         .id();
     lv_idx_entity_paires.pairs.insert(index, (id, None));
     info!("sapwn: entity {}", id);
