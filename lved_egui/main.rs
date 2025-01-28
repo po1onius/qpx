@@ -35,9 +35,10 @@ struct EditCircle {
 }
 
 enum EditItem {
-    Rect(EditRect),
-    Tri(EditTri),
-    Circle(EditCircle),
+    Floor(EditRect),
+    TriObstacle(EditTri),
+    RectObstacle(EditRect),
+    DoubleJump(EditCircle),
 }
 
 impl Default for EditRect {
@@ -80,7 +81,7 @@ struct LevelEditor {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct LevelData {
-    data: Vec<Vec<f32>>,
+    data: Vec<(u32, Vec<f32>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -113,7 +114,7 @@ impl LevelEditor {
         if let Ok(data_str) = data_str_res {
             let lv_data: LevelData = toml::from_str(&data_str).unwrap();
             let mut items = Vec::new();
-            for i in lv_data.data.iter() {
+            for (typ, i) in lv_data.data.iter() {
                 if i.len() == 6 {
                     let tri = EditTri {
                         tri_points: [
@@ -123,16 +124,33 @@ impl LevelEditor {
                         ],
                         is_editing: None,
                     };
-                    items.push(EditItem::Tri(tri));
+                    if *typ == 1 {
+                        items.push(EditItem::TriObstacle(tri));
+                    } else {
+                        panic!();
+                    }
                 } else if i.len() == 4 {
                     let rect = EditRect {
                         rect_pos: egui::Pos2 { x: i[0], y: i[1] },
                         rect_size: egui::Vec2::new(i[2], i[3]),
                         is_editing: None,
                     };
-                    items.push(EditItem::Rect(rect));
-                } else {
-                    panic!();
+                    if *typ == 0 {
+                        items.push(EditItem::Floor(rect));
+                    } else {
+                        items.push(EditItem::RectObstacle(rect));
+                    }
+                } else if i.len() == 3 {
+                    let circle = EditCircle {
+                        circle_pos: egui::Pos2 { x: i[0], y: i[1] },
+                        radius: i[2],
+                        is_editing: None,
+                    };
+                    if *typ == 3 {
+                        items.push(EditItem::DoubleJump(circle));
+                    } else {
+                        panic!();
+                    }
                 }
             }
             Self { items }
@@ -194,7 +212,7 @@ impl EditCircle {
 }
 
 impl EditRect {
-    fn spawn_rect(&mut self, ui: &mut egui::Ui) {
+    fn spawn_rect(&mut self, ui: &mut egui::Ui, color: egui::Color32) {
         let rect = egui::Rect::from_min_size(self.rect_pos, self.rect_size);
         //let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
@@ -202,7 +220,7 @@ impl EditRect {
         ui.painter().rect_stroke(
             rect,
             egui::Rounding::same(0.0),
-            egui::Stroke::new(2.0, egui::Color32::WHITE),
+            egui::Stroke::new(2.0, color),
         );
 
         if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
@@ -394,50 +412,66 @@ impl EditTri {
 impl eframe::App for LevelEditor {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            if ui.button("spawn rect").clicked() {
+            if ui.button("spawn floor").clicked() {
                 let rect = EditRect::default();
-                self.items.push(EditItem::Rect(rect));
+                self.items.push(EditItem::Floor(rect));
             }
 
             if ui.button("spawn tri").clicked() {
                 let tri = EditTri::default();
-                self.items.push(EditItem::Tri(tri));
+                self.items.push(EditItem::TriObstacle(tri));
             }
 
             if ui.button("spawn circle").clicked() {
                 let circle = EditCircle::default();
-                self.items.push(EditItem::Circle(circle));
+                self.items.push(EditItem::DoubleJump(circle));
+            }
+
+            if ui.button("spawn rect obstacle").clicked() {
+                let rect = EditRect::default();
+                self.items.push(EditItem::RectObstacle(rect));
             }
 
             let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
                 for item in self.items.iter() {
                     let mut vt = Vec::new();
+                    let typ;
                     match item {
-                        EditItem::Rect(rect) => {
+                        EditItem::Floor(rect) => {
+                            typ = 0;
                             vt.push(rect.rect_pos.x);
                             vt.push(rect.rect_pos.y);
                             vt.push(rect.rect_size.x);
                             vt.push(rect.rect_size.y);
                         }
-                        EditItem::Tri(tri) => {
+                        EditItem::TriObstacle(tri) => {
+                            typ = 1;
                             for i in tri.tri_points {
                                 vt.push(i.x);
                                 vt.push(i.y);
                             }
                         }
-                        EditItem::Circle(circle) => {
+                        EditItem::RectObstacle(rect) => {
+                            typ = 2;
+                            vt.push(rect.rect_pos.x);
+                            vt.push(rect.rect_pos.y);
+                            vt.push(rect.rect_size.x);
+                            vt.push(rect.rect_size.y);
+                        }
+                        EditItem::DoubleJump(circle) => {
+                            typ = 3;
                             vt.push(circle.circle_pos.x);
                             vt.push(circle.circle_pos.y);
                             vt.push(circle.radius);
                         }
                     }
-                    lv_data_ori.data.push(vt);
+                    lv_data_ori.data.push((typ, vt));
                 }
 
                 lv_data_ori
                     .data
-                    .sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap());
+                    .sort_by(|a, b| a.1[0].partial_cmp(&b.1[0]).unwrap());
 
                 let mut file_ori = OpenOptions::new()
                     .create(true)
@@ -460,13 +494,16 @@ impl eframe::App for LevelEditor {
             }
             for item in self.items.iter_mut() {
                 match item {
-                    EditItem::Rect(rect) => {
-                        rect.spawn_rect(ui);
+                    EditItem::Floor(rect) => {
+                        rect.spawn_rect(ui, egui::Color32::WHITE);
                     }
-                    EditItem::Tri(tri) => {
+                    EditItem::RectObstacle(rect) => {
+                        rect.spawn_rect(ui, egui::Color32::RED);
+                    }
+                    EditItem::TriObstacle(tri) => {
                         tri.spawn_tri(ui);
                     }
-                    EditItem::Circle(circle) => {
+                    EditItem::DoubleJump(circle) => {
                         circle.spawn_circle(ui);
                     }
                 }
@@ -476,7 +513,7 @@ impl eframe::App for LevelEditor {
 }
 
 fn egui2bevy(ld: &mut LevelData) {
-    for i in ld.data.iter_mut() {
+    for (_, i) in ld.data.iter_mut() {
         if i.len() == 4 {
             i[0] = i[0] + i[2] / 2.0;
             i[1] = i[1] + i[3] / 2.0;
