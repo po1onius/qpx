@@ -128,13 +128,14 @@ struct CurLvLabel;
 
 #[derive(Deserialize)]
 struct LevelDataOrigin {
-    data: Vec<Vec<f32>>,
+    data: Vec<(u32, Vec<f32>)>,
 }
 
 enum MapItemData {
-    Tri(Triangle2d),
-    Rect(Vec4),
-    Circle(Vec2, f32),
+    Floor(Vec4),
+    TriObstacle(Triangle2d),
+    RectObstacle(Vec4),
+    DoubleJumpCircle(Vec2, f32),
 }
 
 #[derive(Resource, Default)]
@@ -168,17 +169,22 @@ impl LevelData {
         let file_data = read_to_string(path).unwrap();
         let level_data_origin: LevelDataOrigin = toml::from_str(&file_data).unwrap();
         let mut data = Vec::new();
-        for v in level_data_origin.data {
+        for (typ, v) in level_data_origin.data {
             if v.len() == 4 {
-                data.push(MapItemData::Rect(Vec4::new(v[0], v[1], v[2], v[3])));
+                let rect = Vec4::new(v[0], v[1], v[2], v[3]);
+                if typ == 0 {
+                    data.push(MapItemData::Floor(rect));
+                } else {
+                    data.push(MapItemData::RectObstacle(rect));
+                }
             } else if v.len() == 6 {
-                data.push(MapItemData::Tri(Triangle2d::new(
+                data.push(MapItemData::TriObstacle(Triangle2d::new(
                     Vec2::new(v[0], v[1]),
                     Vec2::new(v[2], v[3]),
                     Vec2::new(v[4], v[5]),
                 )));
             } else if v.len() == 3 {
-                data.push(MapItemData::Circle(Vec2::new(v[0], v[1]), v[2]));
+                data.push(MapItemData::DoubleJumpCircle(Vec2::new(v[0], v[1]), v[2]));
             } else {
                 panic!();
             }
@@ -247,6 +253,19 @@ fn spawn_floor(
     info!("spawn: entity {} {}", id1, id2);
 }
 
+fn spawn_rect_obstacle(
+    cmd: &mut Commands,
+    rect: &Vec4,
+    index: u32,
+    lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+) {
+    let rect_obstacle = MapItemBundle::rect_item(rect, true);
+    let id = cmd.spawn(rect_obstacle).id();
+
+    lv_idx_entity_paires.pairs.insert(index, (id, None));
+    info!("spawn: entity {}", id);
+}
+
 fn spawn_tri_obstacle(
     cmd: &mut Commands,
     tri: &Triangle2d,
@@ -292,19 +311,25 @@ fn game_init(
 
     for (i, l) in level_data.data.iter().enumerate() {
         match l {
-            MapItemData::Rect(rect) => {
+            MapItemData::Floor(rect) => {
                 let lpx = rect.x - rect.z;
                 if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
                 }
             }
-            MapItemData::Tri(tri) => {
+            MapItemData::RectObstacle(rect) => {
+                let lpx = rect.x - rect.z;
+                if lpx > -screen_half_x && lpx < screen_half_x {
+                    spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                }
+            }
+            MapItemData::TriObstacle(tri) => {
                 let lpx = tri.vertices[0].x;
                 if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
                 }
             }
-            MapItemData::Circle(pos, radius) => {
+            MapItemData::DoubleJumpCircle(pos, radius) => {
                 if pos.x > -screen_half_x && pos.y < screen_half_x {
                     spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
                 }
@@ -446,17 +471,21 @@ fn loop_block(
     }
     for (i, item_data) in level_data.data.iter().enumerate() {
         match item_data {
-            MapItemData::Rect(rect) => {
+            MapItemData::Floor(rect) | MapItemData::RectObstacle(rect) => {
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
                 let ng = rect.x - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
-                    spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    if let MapItemData::RectObstacle(_) = item_data {
+                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    } else {
+                        spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    }
                 }
             }
-            MapItemData::Tri(tri) => {
+            MapItemData::TriObstacle(tri) => {
                 if camera_transform.translation.x - tri.vertices[2].x > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
@@ -466,7 +495,7 @@ fn loop_block(
                     spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
                 }
             }
-            MapItemData::Circle(pos, radius) => {
+            MapItemData::DoubleJumpCircle(pos, radius) => {
                 if camera_transform.translation.x - pos.x > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
