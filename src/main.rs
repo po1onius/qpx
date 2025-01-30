@@ -330,7 +330,7 @@ fn game_init(
                 }
             }
             MapItemData::DoubleJumpCircle(pos, radius) => {
-                if pos.x > -screen_half_x && pos.y < screen_half_x {
+                if pos.x > -screen_half_x && pos.x < screen_half_x {
                     spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
                 }
             }
@@ -430,7 +430,7 @@ fn jump(role_sv: Single<(&mut RoleSpeed, &mut RoleState)>) {
     } else {
         *role_state = RoleState::Air(0);
     }
-    role_speed.1 += JUMP_SPEED;
+    role_speed.1 = JUMP_SPEED;
 }
 
 fn role_move(
@@ -479,9 +479,9 @@ fn loop_block(
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
                     if let MapItemData::RectObstacle(_) = item_data {
-                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                    } else {
                         spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    } else {
+                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
                     }
                 }
             }
