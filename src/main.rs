@@ -103,6 +103,8 @@ enum MapItem {
     Obstacle,
     Normal,
     DoubleJump,
+    FlyBegin,
+    FlyEnd,
 }
 
 #[derive(Component)]
@@ -136,6 +138,8 @@ enum MapItemData {
     TriObstacle(Triangle2d),
     RectObstacle(Vec4),
     DoubleJumpCircle(Vec2, f32),
+    RectFlyBegin(Vec4),
+    RectFlyEnd(Vec4),
 }
 
 #[derive(Resource, Default)]
@@ -174,8 +178,12 @@ impl LevelData {
                 let rect = Vec4::new(v[0], v[1], v[2], v[3]);
                 if typ == 0 {
                     data.push(MapItemData::Floor(rect));
-                } else {
+                } else if typ == 2 {
                     data.push(MapItemData::RectObstacle(rect));
+                } else if typ == 4 {
+                    data.push(MapItemData::RectFlyBegin(rect));
+                } else {
+                    data.push(MapItemData::RectFlyEnd(rect));
                 }
             } else if v.len() == 6 {
                 data.push(MapItemData::TriObstacle(Triangle2d::new(
@@ -203,6 +211,19 @@ impl MapItemBundle {
                 MapItem::Obstacle
             } else {
                 MapItem::Normal
+            },
+        }
+    }
+
+    fn rect_fly(rect: &Vec4, begin: bool) -> Self {
+        Self {
+            rigid: RigidBody::Fixed,
+            collider: Collider::cuboid(rect.z, rect.w),
+            position: Transform::from_xyz(rect.x, rect.y, 0.0),
+            map_item: if begin {
+                MapItem::FlyBegin
+            } else {
+                MapItem::FlyEnd
             },
         }
     }
@@ -266,6 +287,20 @@ fn spawn_rect_obstacle(
     info!("spawn: entity {}", id);
 }
 
+fn spawn_rect_fly(
+    cmd: &mut Commands,
+    rect: &Vec4,
+    index: u32,
+    lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+    begin: bool,
+) {
+    let rect_fly = MapItemBundle::rect_fly(rect, begin);
+    let id = cmd.spawn(rect_fly).insert(Sensor).id();
+
+    lv_idx_entity_paires.pairs.insert(index, (id, None));
+    info!("spawn: entity {}", id);
+}
+
 fn spawn_tri_obstacle(
     cmd: &mut Commands,
     tri: &Triangle2d,
@@ -321,6 +356,16 @@ fn game_init(
                 let lpx = rect.x - rect.z;
                 if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                }
+            }
+            MapItemData::RectFlyBegin(rect) | MapItemData::RectFlyEnd(rect) => {
+                let lpx = rect.x - rect.z;
+                let mut begin = false;
+                if lpx > -screen_half_x && lpx < screen_half_x {
+                    if let MapItemData::RectFlyBegin(_) = l {
+                        begin = true;
+                    }
+                    spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, begin);
                 }
             }
             MapItemData::TriObstacle(tri) => {
@@ -403,14 +448,45 @@ fn collide_events(
                                 *role_state = RoleState::Normal;
                                 role_speed.1 = 0.0;
                             }
+                            MapItem::FlyBegin => {
+                                info!("collide fly begin");
+                                *role_state = RoleState::Air(999);
+                            }
+                            MapItem::FlyEnd => {
+                                info!("collide fly end");
+                                *role_state = RoleState::Normal;
+                                role_speed.1 = 0.0;
+                            }
                         }
                     }
                 }
             }
         }
-        if let CollisionEvent::Stopped(..) = collision_event {
+        if let CollisionEvent::Stopped(entity1, entity2, _) = collision_event {
             if let GameState::Playing = state.get() {
-                *role_state = RoleState::Air(0);
+                info!("collide: {}, {}", entity1, entity2);
+                if *entity2 == *role_entity || *entity1 == *role_entity {
+                    let mut other_entity = entity1;
+                    if *entity1 == *role_entity {
+                        other_entity = entity2;
+                    }
+                    for (entity, map_item) in map_item_entities.iter() {
+                        if entity == *other_entity {
+                            match map_item {
+                                MapItem::Obstacle
+                                | MapItem::Normal
+                                | MapItem::DoubleJump
+                                | MapItem::FlyEnd => {
+                                    *role_state = RoleState::Air(0);
+                                }
+                                MapItem::FlyBegin => {
+                                    info!("collide fly begin");
+                                    //*role_state = RoleState::Air(999);
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
                 info!("swallow after boom");
             }
@@ -471,7 +547,10 @@ fn loop_block(
     }
     for (i, item_data) in level_data.data.iter().enumerate() {
         match item_data {
-            MapItemData::Floor(rect) | MapItemData::RectObstacle(rect) => {
+            MapItemData::Floor(rect)
+            | MapItemData::RectObstacle(rect)
+            | MapItemData::RectFlyBegin(rect)
+            | MapItemData::RectFlyEnd(rect) => {
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
@@ -480,8 +559,12 @@ fn loop_block(
                 {
                     if let MapItemData::RectObstacle(_) = item_data {
                         spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                    } else {
+                    } else if let MapItemData::Floor(_) = item_data {
                         spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    } else if let MapItemData::RectFlyBegin(_) = item_data {
+                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, true);
+                    } else {
+                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, false);
                     }
                 }
             }

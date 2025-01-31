@@ -39,6 +39,8 @@ enum EditItem {
     TriObstacle(EditTri),
     RectObstacle(EditRect),
     DoubleJump(EditCircle),
+    RectFlyBegin(EditRect),
+    RectFlyEnd(EditRect),
 }
 
 impl Default for EditRect {
@@ -137,8 +139,12 @@ impl LevelEditor {
                     };
                     if *typ == 0 {
                         items.push(EditItem::Floor(rect));
-                    } else {
+                    } else if *typ == 2 {
                         items.push(EditItem::RectObstacle(rect));
+                    } else if *typ == 4 {
+                        items.push(EditItem::RectFlyBegin(rect));
+                    } else {
+                        items.push(EditItem::RectFlyEnd(rect));
                     }
                 } else if i.len() == 3 {
                     let circle = EditCircle {
@@ -432,18 +438,38 @@ impl eframe::App for LevelEditor {
                 self.items.push(EditItem::RectObstacle(rect));
             }
 
+            if ui.button("spawn rect fly begin").clicked() {
+                let rect = EditRect::default();
+                self.items.push(EditItem::RectFlyBegin(rect));
+            }
+
+            if ui.button("spawn rect fly end").clicked() {
+                let rect = EditRect::default();
+                self.items.push(EditItem::RectFlyEnd(rect));
+            }
+
             let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
                 for item in self.items.iter() {
                     let mut vt = Vec::new();
-                    let typ;
+                    let mut typ: i32 = -1;
+                    let mut rec = &EditRect::default();
                     match item {
                         EditItem::Floor(rect) => {
                             typ = 0;
-                            vt.push(rect.rect_pos.x);
-                            vt.push(rect.rect_pos.y);
-                            vt.push(rect.rect_size.x);
-                            vt.push(rect.rect_size.y);
+                            rec = rect;
+                        }
+                        EditItem::RectObstacle(rect) => {
+                            typ = 2;
+                            rec = rect;
+                        }
+                        EditItem::RectFlyBegin(rect) => {
+                            typ = 4;
+                            rec = rect;
+                        }
+                        EditItem::RectFlyEnd(rect) => {
+                            typ = 5;
+                            rec = rect;
                         }
                         EditItem::TriObstacle(tri) => {
                             typ = 1;
@@ -452,13 +478,6 @@ impl eframe::App for LevelEditor {
                                 vt.push(i.y);
                             }
                         }
-                        EditItem::RectObstacle(rect) => {
-                            typ = 2;
-                            vt.push(rect.rect_pos.x);
-                            vt.push(rect.rect_pos.y);
-                            vt.push(rect.rect_size.x);
-                            vt.push(rect.rect_size.y);
-                        }
                         EditItem::DoubleJump(circle) => {
                             typ = 3;
                             vt.push(circle.circle_pos.x);
@@ -466,7 +485,13 @@ impl eframe::App for LevelEditor {
                             vt.push(circle.radius);
                         }
                     }
-                    lv_data_ori.data.push((typ, vt));
+                    if typ == 0 || typ == 2 || typ == 4 || typ == 5 {
+                        vt.push(rec.rect_pos.x);
+                        vt.push(rec.rect_pos.y);
+                        vt.push(rec.rect_size.x);
+                        vt.push(rec.rect_size.y);
+                    }
+                    lv_data_ori.data.push((typ as u32, vt));
                 }
 
                 lv_data_ori
@@ -499,6 +524,12 @@ impl eframe::App for LevelEditor {
                     }
                     EditItem::RectObstacle(rect) => {
                         rect.spawn_rect(ui, egui::Color32::RED);
+                    }
+                    EditItem::RectFlyBegin(rect) => {
+                        rect.spawn_rect(ui, egui::Color32::GREEN);
+                    }
+                    EditItem::RectFlyEnd(rect) => {
+                        rect.spawn_rect(ui, egui::Color32::BLUE);
                     }
                     EditItem::TriObstacle(tri) => {
                         tri.spawn_tri(ui);
