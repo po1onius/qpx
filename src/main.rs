@@ -375,7 +375,8 @@ fn game_init(
                 }
             }
             MapItemData::DoubleJumpCircle(pos, radius) => {
-                if pos.x > -screen_half_x && pos.x < screen_half_x {
+                let lpx = pos.x - radius;
+                if lpx > -screen_half_x && lpx < screen_half_x {
                     spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
                 }
             }
@@ -554,7 +555,7 @@ fn loop_block(
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
-                let ng = rect.x - camera_transform.translation.x;
+                let ng = rect.x - rect.z - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
                     if let MapItemData::RectObstacle(_) = item_data {
@@ -582,7 +583,7 @@ fn loop_block(
                 if camera_transform.translation.x - pos.x > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
                 }
-                let ng = pos.x - camera_transform.translation.x;
+                let ng = pos.x - radius - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
                     spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
