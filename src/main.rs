@@ -455,8 +455,7 @@ fn collide_events(
                             }
                             MapItem::FlyEnd => {
                                 info!("collide fly end");
-                                *role_state = RoleState::Normal;
-                                role_speed.1 = 0.0;
+                                *role_state = RoleState::Air(0);
                             }
                         }
                     }
