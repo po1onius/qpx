@@ -642,7 +642,16 @@ fn main_ui(mut cmd: Commands, lvs: Res<CurLevel>) {
         ..default()
     })
     .with_children(|parent| {
-        for i in ["<", lvs.lvs[lvs.cur_idx].as_str(), ">", "start"] {
+        for i in [
+            "<",
+            Path::new(lvs.lvs[lvs.cur_idx].as_str())
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            ">",
+            "start",
+        ] {
             match i {
                 "<" => {
                     parent
@@ -755,7 +764,12 @@ fn select_lv_left_button_action(
             lvs.cur_idx -= 1;
         }
         let mut text = cur_lv_text.into_inner();
-        **text = lvs.lvs[lvs.cur_idx].to_string();
+        **text = Path::new(lvs.lvs[lvs.cur_idx].as_str())
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
     }
 }
 
@@ -770,7 +784,12 @@ fn select_lv_right_button_action(
     if let Interaction::Pressed = interaction {
         lvs.cur_idx = (lvs.cur_idx + 1) % lvs.lvs.len();
         let mut text = cur_lv_text.into_inner();
-        **text = lvs.lvs[lvs.cur_idx].to_string();
+        **text = Path::new(lvs.lvs[lvs.cur_idx].as_str())
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
     }
 }
 
