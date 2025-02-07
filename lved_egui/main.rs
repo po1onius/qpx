@@ -167,7 +167,7 @@ impl LevelEditor {
 }
 
 impl EditCircle {
-    fn spawn_circle(&mut self, ui: &mut egui::Ui) {
+    fn spawn_circle(&mut self, ui: &mut egui::Ui) -> bool {
         ui.painter().circle_stroke(
             self.circle_pos,
             self.radius,
@@ -214,6 +214,11 @@ impl EditCircle {
                 }
             }
         }
+
+        if self.circle_pos.y < 10.0 {
+            return false;
+        }
+        return true;
     }
 }
 
@@ -517,7 +522,8 @@ impl eframe::App for LevelEditor {
                 let s = toml::to_string(&lv_data_ori).unwrap();
                 let _ = file.write_all(s.as_bytes());
             }
-            for item in self.items.iter_mut() {
+            let mut drop_idx = -1;
+            for (i, item) in self.items.iter_mut().enumerate() {
                 match item {
                     EditItem::Floor(rect) => {
                         rect.spawn_rect(ui, egui::Color32::WHITE);
@@ -535,9 +541,14 @@ impl eframe::App for LevelEditor {
                         tri.spawn_tri(ui);
                     }
                     EditItem::DoubleJump(circle) => {
-                        circle.spawn_circle(ui);
+                        if !circle.spawn_circle(ui) {
+                            drop_idx = i as i32;
+                        }
                     }
                 }
+            }
+            if drop_idx >= 0 {
+                self.items.remove(drop_idx as usize);
             }
         });
     }
