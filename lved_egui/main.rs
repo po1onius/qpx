@@ -7,11 +7,12 @@ use std::{
 };
 
 fn main() {
+    env_logger::init();
     let mut options = eframe::NativeOptions::default();
     options.viewport.resizable = Some(false);
     options.viewport.inner_size = Some(egui::Vec2::new(1280.0, 720.0));
     let _ = eframe::run_native(
-        "Resizable Rectangle with Border Drag",
+        "qpx level data editor",
         options,
         Box::new(|_| Ok(Box::new(LevelEditor::from_toml("level_data/egui.toml")))),
     );
@@ -223,7 +224,7 @@ impl EditCircle {
 }
 
 impl EditRect {
-    fn spawn_rect(&mut self, ui: &mut egui::Ui, color: egui::Color32) {
+    fn spawn_rect(&mut self, ui: &mut egui::Ui, color: egui::Color32) -> bool {
         let rect = egui::Rect::from_min_size(self.rect_pos, self.rect_size);
         //let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
@@ -329,11 +330,15 @@ impl EditRect {
                 }
             }
         }
+        if self.rect_pos.y < 10.0 {
+            return false;
+        }
+        return true;
     }
 }
 
 impl EditTri {
-    fn spawn_tri(&mut self, ui: &mut egui::Ui) {
+    fn spawn_tri(&mut self, ui: &mut egui::Ui) -> bool {
         ui.painter().add(egui::Shape::convex_polygon(
             self.tri_points.to_vec(),
             egui::Color32::LIGHT_BLUE,
@@ -417,6 +422,11 @@ impl EditTri {
                 }
             }
         }
+
+        if self.tri_points[0].y < 10.0 {
+            return false;
+        }
+        return true;
     }
 }
 
@@ -526,19 +536,29 @@ impl eframe::App for LevelEditor {
             for (i, item) in self.items.iter_mut().enumerate() {
                 match item {
                     EditItem::Floor(rect) => {
-                        rect.spawn_rect(ui, egui::Color32::WHITE);
+                        if !rect.spawn_rect(ui, egui::Color32::WHITE) {
+                            drop_idx = i as i32;
+                        }
                     }
                     EditItem::RectObstacle(rect) => {
-                        rect.spawn_rect(ui, egui::Color32::RED);
+                        if !rect.spawn_rect(ui, egui::Color32::RED) {
+                            drop_idx = i as i32;
+                        }
                     }
                     EditItem::RectFlyBegin(rect) => {
-                        rect.spawn_rect(ui, egui::Color32::GREEN);
+                        if !rect.spawn_rect(ui, egui::Color32::GREEN) {
+                            drop_idx = i as i32;
+                        }
                     }
                     EditItem::RectFlyEnd(rect) => {
-                        rect.spawn_rect(ui, egui::Color32::BLUE);
+                        if !rect.spawn_rect(ui, egui::Color32::BLUE) {
+                            drop_idx = i as i32;
+                        }
                     }
                     EditItem::TriObstacle(tri) => {
-                        tri.spawn_tri(ui);
+                        if !tri.spawn_tri(ui) {
+                            drop_idx = i as i32;
+                        }
                     }
                     EditItem::DoubleJump(circle) => {
                         if !circle.spawn_circle(ui) {
