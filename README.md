@@ -1,5 +1,5 @@
 ## qpx(WIP)
-* about
+* about<br>
 类似《几何冲刺》(Geometry Dash)的小游戏,包含一个关卡编辑器
 * usage
   ```rust
@@ -9,5 +9,5 @@
   ```rust
   cargo run --bin lved_egui
   ```
-* todo
+* todo<br>
 添加音效，贴图，动效
