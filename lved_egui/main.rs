@@ -1,4 +1,4 @@
-use eframe::egui;
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Stroke};
 use std::{
     collections::HashMap,
     fs::{read_to_string, OpenOptions},
@@ -6,11 +6,16 @@ use std::{
     path::Path,
 };
 
+const EDGE_THRESHOLD: f32 = 10.0;
+const WINDOW_SIZE_X: f32 = 1280.0;
+const WINDOW_SIZE_Y: f32 = 720.0;
+const DROP_AREA_Y: f32 = 30.0;
+
 fn main() {
     env_logger::init();
     let mut options = eframe::NativeOptions::default();
     options.viewport.resizable = Some(false);
-    options.viewport.inner_size = Some(egui::Vec2::new(1280.0, 720.0));
+    options.viewport.inner_size = Some(egui::Vec2::new(WINDOW_SIZE_X, WINDOW_SIZE_Y));
     let _ = eframe::run_native(
         "qpx level data editor",
         options,
@@ -108,8 +113,6 @@ enum EditOptionCircle {
     Pos(egui::Vec2),
     Radius,
 }
-
-const EDGE_THRESHOLD: f32 = 10.0;
 
 impl LevelEditor {
     fn from_toml(path: impl AsRef<Path>) -> Self {
@@ -216,7 +219,7 @@ impl EditCircle {
             }
         }
 
-        if self.circle_pos.y < 10.0 {
+        if self.circle_pos.y < DROP_AREA_Y {
             return false;
         }
         return true;
@@ -330,7 +333,7 @@ impl EditRect {
                 }
             }
         }
-        if self.rect_pos.y < 10.0 {
+        if self.rect_pos.y < DROP_AREA_Y {
             return false;
         }
         return true;
@@ -423,7 +426,7 @@ impl EditTri {
             }
         }
 
-        if self.tri_points[0].y < 10.0 {
+        if self.tri_points[0].y < DROP_AREA_Y {
             return false;
         }
         return true;
@@ -433,6 +436,22 @@ impl EditTri {
 impl eframe::App for LevelEditor {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.painter().line_segment(
+                [
+                    Pos2::new(0.0, DROP_AREA_Y),
+                    Pos2::new(WINDOW_SIZE_X, DROP_AREA_Y),
+                ],
+                Stroke::new(1.0, Color32::RED),
+            );
+
+            ui.painter().text(
+                Pos2::new(WINDOW_SIZE_X / 2.0, DROP_AREA_Y / 2.0),
+                Align2::CENTER_CENTER,
+                "drop here to delete item",
+                FontId::default(),
+                Color32::RED,
+            );
+
             if ui.button("spawn floor").clicked() {
                 let rect = EditRect::default();
                 self.items.push(EditItem::Floor(rect));
