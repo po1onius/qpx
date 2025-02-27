@@ -47,6 +47,7 @@ enum EditItem {
     DoubleJump(EditCircle),
     RectFlyBegin(EditRect),
     RectFlyEnd(EditRect),
+    Pass(EditRect),
 }
 
 impl Default for EditRect {
@@ -147,8 +148,10 @@ impl LevelEditor {
                         items.push(EditItem::RectObstacle(rect));
                     } else if *typ == 4 {
                         items.push(EditItem::RectFlyBegin(rect));
-                    } else {
+                    } else if *typ == 5 {
                         items.push(EditItem::RectFlyEnd(rect));
+                    } else {
+                        items.push(EditItem::Pass(rect));
                     }
                 } else if i.len() == 3 {
                     let circle = EditCircle {
@@ -482,6 +485,11 @@ impl eframe::App for LevelEditor {
                 self.items.push(EditItem::RectFlyEnd(rect));
             }
 
+            if ui.button("spawn level pass").clicked() {
+                let rect = EditRect::default();
+                self.items.push(EditItem::Pass(rect));
+            }
+
             let mut lv_data_ori = LevelData { data: Vec::new() };
             if ui.button("save data").clicked() {
                 for item in self.items.iter() {
@@ -505,6 +513,10 @@ impl eframe::App for LevelEditor {
                             typ = 5;
                             rec = rect;
                         }
+                        EditItem::Pass(rect) => {
+                            typ = 6;
+                            rec = rect;
+                        }
                         EditItem::TriObstacle(tri) => {
                             typ = 1;
                             for i in tri.tri_points {
@@ -519,7 +531,7 @@ impl eframe::App for LevelEditor {
                             vt.push(circle.radius);
                         }
                     }
-                    if typ == 0 || typ == 2 || typ == 4 || typ == 5 {
+                    if typ != 1 && typ != 3 {
                         vt.push(rec.rect_pos.x);
                         vt.push(rec.rect_pos.y);
                         vt.push(rec.rect_size.x);
@@ -571,6 +583,11 @@ impl eframe::App for LevelEditor {
                     }
                     EditItem::RectFlyEnd(rect) => {
                         if !rect.spawn_rect(ui, egui::Color32::BLUE) {
+                            drop_idx = i as i32;
+                        }
+                    }
+                    EditItem::Pass(rect) => {
+                        if !rect.spawn_rect(ui, egui::Color32::YELLOW) {
                             drop_idx = i as i32;
                         }
                     }
