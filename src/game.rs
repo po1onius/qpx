@@ -37,6 +37,19 @@ fn spawn_rect_obstacle(
     info!("spawn: entity {}", id);
 }
 
+fn spawn_rect_pass(
+    cmd: &mut Commands,
+    rect: &Vec4,
+    index: u32,
+    lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+) {
+    let rect_pass = MapItemBundle::rect_pass(rect);
+    let id = cmd.spawn(rect_pass).id();
+
+    lv_idx_entity_paires.pairs.insert(index, (id, None));
+    info!("spawn: entity {}", id);
+}
+
 fn spawn_rect_fly(
     cmd: &mut Commands,
     rect: &Vec4,
@@ -95,26 +108,24 @@ pub fn game_init(
 
     for (i, l) in level_data.data.iter().enumerate() {
         match l {
-            MapItemData::Floor(rect) => {
+            MapItemData::RectFlyBegin(rect)
+            | MapItemData::RectFlyEnd(rect)
+            | MapItemData::RectObstacle(rect)
+            | MapItemData::RectPass(rect)
+            | MapItemData::Floor(rect) => {
                 let lpx = rect.x - rect.z;
-                if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                }
-            }
-            MapItemData::RectObstacle(rect) => {
-                let lpx = rect.x - rect.z;
-                if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                }
-            }
-            MapItemData::RectFlyBegin(rect) | MapItemData::RectFlyEnd(rect) => {
-                let lpx = rect.x - rect.z;
-                let mut begin = false;
                 if lpx > -screen_half_x && lpx < screen_half_x {
                     if let MapItemData::RectFlyBegin(_) = l {
-                        begin = true;
+                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, true);
+                    } else if let MapItemData::RectFlyEnd(_) = l {
+                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, false);
+                    } else if let MapItemData::Floor(_) = l {
+                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    } else if let MapItemData::RectObstacle(_) = l {
+                        spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                    } else if let MapItemData::RectPass(_) = l {
+                        spawn_rect_pass(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
                     }
-                    spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, begin);
                 }
             }
             MapItemData::TriObstacle(tri) => {
@@ -206,6 +217,10 @@ pub fn collide_events(
                                 info!("collide fly end");
                                 *role_state = RoleState::Air(0);
                             }
+                            MapItem::Pass => {
+                                info!("collide pass");
+                                nxt_state.set(GameState::Paused);
+                            }
                         }
                     }
                 }
@@ -225,6 +240,7 @@ pub fn collide_events(
                                 MapItem::Obstacle
                                 | MapItem::Normal
                                 | MapItem::DoubleJump
+                                | MapItem::Pass
                                 | MapItem::FlyEnd => {
                                     *role_state = RoleState::Air(0);
                                 }
@@ -299,6 +315,7 @@ pub fn loop_block(
             MapItemData::Floor(rect)
             | MapItemData::RectObstacle(rect)
             | MapItemData::RectFlyBegin(rect)
+            | MapItemData::RectPass(rect)
             | MapItemData::RectFlyEnd(rect) => {
                 if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
                     despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
@@ -306,14 +323,40 @@ pub fn loop_block(
                 let ng = rect.x - rect.z - camera_transform.translation.x;
                 if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
                 {
-                    if let MapItemData::RectObstacle(_) = item_data {
-                        spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                    } else if let MapItemData::Floor(_) = item_data {
-                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                    } else if let MapItemData::RectFlyBegin(_) = item_data {
-                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, true);
-                    } else {
-                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, false);
+                    match item_data {
+                        MapItemData::RectObstacle(_) => {
+                            spawn_rect_obstacle(
+                                &mut cmd,
+                                rect,
+                                i as u32,
+                                &mut lv_idx_entity_paires,
+                            );
+                        }
+                        MapItemData::Floor(_) => {
+                            spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                        }
+                        MapItemData::RectFlyBegin(_) => {
+                            spawn_rect_fly(
+                                &mut cmd,
+                                rect,
+                                i as u32,
+                                &mut lv_idx_entity_paires,
+                                true,
+                            );
+                        }
+                        MapItemData::RectFlyEnd(_) => {
+                            spawn_rect_fly(
+                                &mut cmd,
+                                rect,
+                                i as u32,
+                                &mut lv_idx_entity_paires,
+                                false,
+                            );
+                        }
+                        MapItemData::RectPass(_) => {
+                            spawn_rect_pass(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                        }
+                        _ => (),
                     }
                 }
             }

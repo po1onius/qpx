@@ -50,6 +50,7 @@ pub enum MapItem {
     DoubleJump,
     FlyBegin,
     FlyEnd,
+    Pass,
 }
 
 #[derive(Component)]
@@ -85,6 +86,7 @@ pub enum MapItemData {
     DoubleJumpCircle(Vec2, f32),
     RectFlyBegin(Vec4),
     RectFlyEnd(Vec4),
+    RectPass(Vec4),
 }
 
 #[derive(Resource, Default)]
@@ -170,6 +172,15 @@ impl MapItemBundle {
             } else {
                 MapItem::FlyEnd
             },
+        }
+    }
+
+    pub fn rect_pass(rect: &Vec4) -> Self {
+        Self {
+            rigid: RigidBody::Fixed,
+            collider: Collider::cuboid(rect.z, rect.w),
+            position: Transform::from_xyz(rect.x, rect.y, 0.0),
+            map_item: MapItem::Pass,
         }
     }
 
