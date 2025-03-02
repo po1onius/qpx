@@ -129,8 +129,10 @@ impl LevelData {
                     data.push(MapItemData::RectObstacle(rect));
                 } else if typ == 4 {
                     data.push(MapItemData::RectFlyBegin(rect));
-                } else {
+                } else if typ == 5 {
                     data.push(MapItemData::RectFlyEnd(rect));
+                } else {
+                    data.push(MapItemData::RectPass(rect));
                 }
             } else if v.len() == 6 {
                 data.push(MapItemData::TriObstacle(Triangle2d::new(
