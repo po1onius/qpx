@@ -495,7 +495,7 @@ impl eframe::App for LevelEditor {
             if ui.button("save data").clicked() {
                 for item in self.items.iter() {
                     let mut vt = Vec::new();
-                    let mut typ: i32 = -1;
+                    let typ;
                     let mut rec = &EditRect::default();
                     match item {
                         EditItem::Floor(rect) => {
