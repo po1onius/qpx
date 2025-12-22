@@ -9,33 +9,25 @@ name = "lved_egui"
 path = "lved_egui/main.rs"
 
 [dependencies]
-bevy = { version = "0.15", features = [
+bevy = { version = "*", features = [
     "dynamic_linking",
     "bevy_dev_tools",
     "shader_format_spirv",
     "wayland",
     "jpeg"
 ] }
-bevy_single = "0.1.0"
-bevy_image = "0.15"
-bevy_schedules_ext = "0.14.1"
-bevy_rapier2d = { version = "0.28.0", features = ["parallel", "simd-stable", "debug-render-2d"] }
-# avian2d = { version = "0.1.2", features = ["simd"] }
-serde = "1.0"
-serde_json = "1.0"
-rand = "0.8.5"
-rand_chacha = "0.3.1"
-bevy_mod_billboard = "0.7.0"
-toml = "0.8"
+bevy_single = "*"
+bevy_image = "*"
+bevy_schedules_ext = "*"
+bevy_rapier2d = { version = "*", features = ["parallel", "simd-stable", "debug-render-2d"] }
+serde = "*"
+serde_json = "*"
+rand = "*"
+rand_chacha = "*"
+bevy_mod_billboard = "*"
+toml = "*"
+
 #[dependencies.lved_egui]
-eframe = { version = "0.30", features = [
-    "default"
-] }
-
-# For image support:
-egui_extras = { version = "0.30", features = ["default", "image"] }
-
-env_logger = { version = "0.10", default-features = false, features = [
-    "auto-color",
-    "humantime",
-] }
+eframe = "*"
+egui_extras = { version = "*", features = ["image"] }
+env_logger = { version = "*", default-features = false, features = ["auto-color", "humantime"] }

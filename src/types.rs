@@ -14,8 +14,8 @@ pub const GRAVITY: f32 = 1300.0;
 pub const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 pub const BALL_SIZE: f32 = 30.0;
 pub const LV_DATA_PATH: &str = "level_data";
-pub const WINDOW_RESOLUTION_X: f32 = 1280.0;
-pub const WINDOW_RESOLUTION_Y: f32 = 720.0;
+pub const WINDOW_RESOLUTION_X: u32 = 1280;
+pub const WINDOW_RESOLUTION_Y: u32 = 720;
 
 #[derive(States, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GameState {

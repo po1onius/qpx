@@ -91,7 +91,7 @@ fn spawn_circle(
 }
 pub fn game_init(
     mut cmd: Commands,
-    asset_server: Res<AssetServer>,
+    _asset_server: Res<AssetServer>,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
     mut camera_transform: Single<
@@ -104,9 +104,10 @@ pub fn game_init(
     camera_transform.translation.x = 0.0;
     camera_transform.translation.y = 0.0;
 
-    let screen_half_x = WINDOW_RESOLUTION_X / 2.0;
+    let screen_half_x = (WINDOW_RESOLUTION_X / 2) as f32;
 
     for (i, l) in level_data.data.iter().enumerate() {
+        let i = i as u32;
         match l {
             MapItemData::RectFlyBegin(rect)
             | MapItemData::RectFlyEnd(rect)
@@ -116,28 +117,28 @@ pub fn game_init(
                 let lpx = rect.x - rect.z;
                 if lpx > -screen_half_x && lpx < screen_half_x {
                     if let MapItemData::RectFlyBegin(_) = l {
-                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, true);
+                        spawn_rect_fly(&mut cmd, rect, i, &mut lv_idx_entity_paires, true);
                     } else if let MapItemData::RectFlyEnd(_) = l {
-                        spawn_rect_fly(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires, false);
+                        spawn_rect_fly(&mut cmd, rect, i, &mut lv_idx_entity_paires, false);
                     } else if let MapItemData::Floor(_) = l {
-                        spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                        spawn_floor(&mut cmd, rect, i, &mut lv_idx_entity_paires);
                     } else if let MapItemData::RectObstacle(_) = l {
-                        spawn_rect_obstacle(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                        spawn_rect_obstacle(&mut cmd, rect, i, &mut lv_idx_entity_paires);
                     } else if let MapItemData::RectPass(_) = l {
-                        spawn_rect_pass(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
+                        spawn_rect_pass(&mut cmd, rect, i, &mut lv_idx_entity_paires);
                     }
                 }
             }
             MapItemData::TriObstacle(tri) => {
                 let lpx = tri.vertices[0].x;
                 if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
+                    spawn_tri_obstacle(&mut cmd, tri, i, &mut lv_idx_entity_paires);
                 }
             }
             MapItemData::DoubleJumpCircle(pos, radius) => {
                 let lpx = pos.x - radius;
                 if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
+                    spawn_circle(&mut cmd, pos, *radius, i, &mut lv_idx_entity_paires);
                 }
             }
         }
@@ -168,7 +169,7 @@ pub fn gravity(role_sv: Single<(&mut RoleSpeed, &RoleState)>, time: Res<Time>) {
 /* A system that displays the events. */
 pub fn collide_events(
     mut cmd: Commands,
-    mut collision_events: EventReader<CollisionEvent>,
+    mut collision_events: MessageReader<CollisionEvent>,
     role_sv: Single<(&mut RoleSpeed, &mut RoleState)>,
     role_entity: Single<Entity, With<RoleState>>,
     map_item_entities: Query<(Entity, &MapItem)>,

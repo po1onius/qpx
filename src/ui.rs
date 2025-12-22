@@ -118,11 +118,11 @@ pub fn pause_ui(mut cmd: Commands) {
 }
 
 pub fn leave_pause(mut cmd: Commands, pause_ui: Single<Entity, With<PauseUIEntity>>) {
-    cmd.entity(*pause_ui).despawn_recursive();
+    cmd.entity(*pause_ui).despawn();
 }
 
 pub fn leave_main(mut cmd: Commands, main_ui: Single<Entity, With<MainUIEntity>>) {
-    cmd.entity(*main_ui).despawn_recursive();
+    cmd.entity(*main_ui).despawn();
 }
 
 pub fn start_button_action(
@@ -131,7 +131,7 @@ pub fn start_button_action(
     lvs: Res<CurLevel>,
     mut lvd: ResMut<LevelData>,
 ) {
-    let Ok(interaction) = start_button.get_single() else {
+    let Ok(interaction) = start_button.single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
@@ -146,7 +146,7 @@ pub fn select_lv_left_button_action(
     mut lvs: ResMut<CurLevel>,
     cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
 ) {
-    let Ok(interaction) = left_select_btn.get_single() else {
+    let Ok(interaction) = left_select_btn.single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
@@ -170,7 +170,7 @@ pub fn select_lv_right_button_action(
     mut lvs: ResMut<CurLevel>,
     cur_lv_text: Single<&mut Text, With<CurLvLabel>>,
 ) {
-    let Ok(interaction) = right_select_btn.get_single() else {
+    let Ok(interaction) = right_select_btn.single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
@@ -193,14 +193,14 @@ pub fn return_main_ui(
     mut next_state: ResMut<NextState<GameState>>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
 ) {
-    let Ok(interaction) = return_btn.get_single() else {
+    let Ok(interaction) = return_btn.single() else {
         return;
     };
     if let Interaction::Pressed = interaction {
         for entity in &map_item {
-            cmd.entity(entity).despawn_recursive();
+            cmd.entity(entity).despawn();
         }
-        cmd.entity(*role).despawn_recursive();
+        cmd.entity(*role).despawn();
         lv_idx_entity_paires.pairs.clear();
         next_state.set(GameState::Main);
     }

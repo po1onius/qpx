@@ -237,8 +237,9 @@ impl EditRect {
         // 绘制矩形
         ui.painter().rect_stroke(
             rect,
-            egui::Rounding::same(0.0),
+            egui::CornerRadius::same(0),
             egui::Stroke::new(2.0, color),
+            egui::StrokeKind::Outside
         );
 
         if ui.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
