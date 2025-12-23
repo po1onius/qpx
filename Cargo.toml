@@ -5,8 +5,8 @@ edition = "2024"
 default-run = "qpx"
 
 [[bin]]
-name = "lved_egui"
-path = "lved_egui/main.rs"
+name = "level_editor"
+path = "level_editor/main.rs"
 
 [dependencies]
 bevy = { version = "*", features = [
@@ -27,7 +27,7 @@ rand_chacha = "*"
 bevy_mod_billboard = "*"
 toml = "*"
 
-#[dependencies.lved_egui]
+#[dependencies.level_editor]
 eframe = "*"
 egui_extras = { version = "*", features = ["image"] }
 env_logger = { version = "*", default-features = false, features = ["auto-color", "humantime"] }

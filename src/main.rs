@@ -42,7 +42,7 @@ fn main() -> AppExit {
                 gravity,
                 jump.run_if(input_just_pressed(KeyCode::Space)),
                 role_move,
-                loop_block,
+                dynamic_map_item,
             )
                 .run_if(in_state(GameState::Playing)),
         )

@@ -90,11 +90,95 @@ fn spawn_circle(
     info!("sapwn: entity {}", id);
 }
 
-pub fn game_init(
+// 随着镜头移动创建和销毁地图资源
+pub fn dynamic_map_item(
     mut cmd: Commands,
-    _asset_server: Res<AssetServer>,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
+    _asset_server: Res<AssetServer>,
+    camera_transform: Single<&mut Transform, (With<Camera>, Without<RoleSpeed>, Without<MapItem>)>,
+) {
+    let screen_half_x = (WINDOW_RESOLUTION_X / 2) as f32;
+
+    type SpawnRectArgs<'a, 'b, 'c, 'd> =
+        (&'a mut Commands<'b, 'c>, &'a mut ResMut<'d, IdxEntityPair>);
+
+    for (i, lv_data) in level_data.data.iter().enumerate() {
+        let i = i as u32;
+        let (spawn_f, left, right): (Box<dyn Fn(SpawnRectArgs)>, _, _) = match lv_data {
+            MapItemData::RectFlyBegin(rect) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_rect_fly(args.0, rect, i, args.1, true);
+                }),
+                rect.x - rect.z,
+                rect.x + rect.z,
+            ),
+            MapItemData::RectFlyEnd(rect) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_rect_fly(args.0, rect, i, args.1, false);
+                }),
+                rect.x - rect.z,
+                rect.x + rect.z,
+            ),
+            MapItemData::RectObstacle(rect) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_rect_obstacle(args.0, rect, i, args.1);
+                }),
+                rect.x - rect.z,
+                rect.x + rect.z,
+            ),
+            MapItemData::RectPass(rect) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_rect_pass(args.0, rect, i, args.1);
+                }),
+                rect.x - rect.z,
+                rect.x + rect.z,
+            ),
+            MapItemData::Floor(rect) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_floor(args.0, rect, i, args.1);
+                }),
+                rect.x - rect.z,
+                rect.x + rect.z,
+            ),
+            MapItemData::TriObstacle(tri) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_tri_obstacle(args.0, tri, i, args.1);
+                }),
+                tri.vertices[0].x,
+                tri.vertices[2].x,
+            ),
+
+            MapItemData::DoubleJumpCircle(pos, radius) => (
+                Box::new(|args: SpawnRectArgs| {
+                    spawn_circle(args.0, pos, *radius, i, args.1);
+                }),
+                pos.x - radius,
+                pos.x + radius,
+            ),
+        };
+
+        if let Some(entity_idx) = lv_idx_entity_paires.pairs.get(&i) {
+            if camera_transform.translation.x - right > screen_half_x {
+                cmd.entity(entity_idx.0).despawn();
+                info!("destroy entity {}", entity_idx.0);
+                if let Some(attach_entity) = entity_idx.1 {
+                    cmd.entity(attach_entity).despawn();
+                    info!("destroy entity {}", attach_entity);
+                }
+                lv_idx_entity_paires.pairs.remove(&i);
+            }
+        } else {
+            let coming_distance = left - camera_transform.translation.x;
+            if coming_distance > 0.0 && coming_distance < screen_half_x {
+                spawn_f((&mut cmd, &mut lv_idx_entity_paires));
+            }
+        }
+    }
+}
+
+pub fn game_init(
+    mut cmd: Commands,
     mut camera_transform: Single<
         &mut Transform,
         (With<Camera>, Without<RoleSpeed>, Without<MapItem>),
@@ -104,71 +188,6 @@ pub fn game_init(
     //let block_texture = asset_server.load("block.png");
     camera_transform.translation.x = 0.0;
     camera_transform.translation.y = 0.0;
-
-    let screen_half_x = (WINDOW_RESOLUTION_X / 2) as f32;
-
-    type SpawnRectArgs<'a, 'b, 'c, 'd> = (
-        &'a mut Commands<'b, 'c>,
-        &'a Vec4,
-        u32,
-        &'a mut ResMut<'d, IdxEntityPair>,
-    );
-
-    for (i, lv_data) in level_data.data.iter().enumerate() {
-        let i = i as u32;
-        let rect_spawn_meta: Option<(fn(args: SpawnRectArgs), _)> = match lv_data {
-            MapItemData::RectFlyBegin(rect) => Some((
-                |args: SpawnRectArgs| {
-                    spawn_rect_fly(args.0, args.1, args.2, args.3, true);
-                },
-                rect,
-            )),
-            MapItemData::RectFlyEnd(rect) => Some((
-                |args: SpawnRectArgs| {
-                    spawn_rect_fly(args.0, args.1, args.2, args.3, false);
-                },
-                rect,
-            )),
-            MapItemData::RectObstacle(rect) => Some((
-                |args: SpawnRectArgs| {
-                    spawn_rect_obstacle(args.0, args.1, args.2, args.3);
-                },
-                rect,
-            )),
-            MapItemData::RectPass(rect) => Some((
-                |args: SpawnRectArgs| {
-                    spawn_rect_pass(args.0, args.1, args.2, args.3);
-                },
-                rect,
-            )),
-            MapItemData::Floor(rect) => Some((
-                |args: SpawnRectArgs| {
-                    spawn_floor(args.0, args.1, args.2, args.3);
-                },
-                rect,
-            )),
-            MapItemData::TriObstacle(tri) => {
-                let lpx = tri.vertices[0].x;
-                if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_tri_obstacle(&mut cmd, tri, i, &mut lv_idx_entity_paires);
-                }
-                None
-            }
-            MapItemData::DoubleJumpCircle(pos, radius) => {
-                let lpx = pos.x - radius;
-                if lpx > -screen_half_x && lpx < screen_half_x {
-                    spawn_circle(&mut cmd, pos, *radius, i, &mut lv_idx_entity_paires);
-                }
-                None
-            }
-        };
-        if let Some((f, rect)) = rect_spawn_meta {
-            let lpx = rect.x - rect.z;
-            if lpx > -screen_half_x && lpx < screen_half_x {
-                f((&mut cmd, rect, i, &mut lv_idx_entity_paires));
-            }
-        }
-    }
 
     cmd.spawn((
         RigidBody::Dynamic,
@@ -313,102 +332,6 @@ pub fn role_move(
     role_transform.translation.x += speed.0 * time.delta_secs();
     role_transform.translation.y += speed.1 * time.delta_secs();
     camera_transform.translation.x += speed.0 * time.delta_secs();
-}
-
-pub fn loop_block(
-    mut cmd: Commands,
-    camera_transform: Single<&Transform, (With<Camera>, Without<RoleSpeed>, Without<MapItem>)>,
-    level_data: Res<LevelData>,
-    mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
-) {
-    fn despawn_by_lv_idx(
-        cmd: &mut Commands,
-        lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
-        idx: u32,
-    ) {
-        if let Some((entity, entity_op)) = lv_idx_entity_paires.pairs.get(&idx) {
-            info!("despawn: {}", entity);
-            cmd.entity(*entity).despawn();
-
-            if let Some(entity) = entity_op {
-                info!("despawn: {}", entity);
-                cmd.entity(*entity).despawn();
-            }
-        }
-        lv_idx_entity_paires.pairs.remove(&idx);
-    }
-    for (i, item_data) in level_data.data.iter().enumerate() {
-        match item_data {
-            MapItemData::Floor(rect)
-            | MapItemData::RectObstacle(rect)
-            | MapItemData::RectFlyBegin(rect)
-            | MapItemData::RectPass(rect)
-            | MapItemData::RectFlyEnd(rect) => {
-                if camera_transform.translation.x - (rect.x + rect.z) > 500.0 {
-                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
-                }
-                let ng = rect.x - rect.z - camera_transform.translation.x;
-                if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
-                {
-                    match item_data {
-                        MapItemData::RectObstacle(_) => {
-                            spawn_rect_obstacle(
-                                &mut cmd,
-                                rect,
-                                i as u32,
-                                &mut lv_idx_entity_paires,
-                            );
-                        }
-                        MapItemData::Floor(_) => {
-                            spawn_floor(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                        }
-                        MapItemData::RectFlyBegin(_) => {
-                            spawn_rect_fly(
-                                &mut cmd,
-                                rect,
-                                i as u32,
-                                &mut lv_idx_entity_paires,
-                                true,
-                            );
-                        }
-                        MapItemData::RectFlyEnd(_) => {
-                            spawn_rect_fly(
-                                &mut cmd,
-                                rect,
-                                i as u32,
-                                &mut lv_idx_entity_paires,
-                                false,
-                            );
-                        }
-                        MapItemData::RectPass(_) => {
-                            spawn_rect_pass(&mut cmd, rect, i as u32, &mut lv_idx_entity_paires);
-                        }
-                        _ => (),
-                    }
-                }
-            }
-            MapItemData::TriObstacle(tri) => {
-                if camera_transform.translation.x - tri.vertices[2].x > 500.0 {
-                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
-                }
-                let ng = tri.vertices[0].x - camera_transform.translation.x;
-                if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
-                {
-                    spawn_tri_obstacle(&mut cmd, tri, i as u32, &mut lv_idx_entity_paires);
-                }
-            }
-            MapItemData::DoubleJumpCircle(pos, radius) => {
-                if camera_transform.translation.x - pos.x > 500.0 {
-                    despawn_by_lv_idx(&mut cmd, &mut lv_idx_entity_paires, i as u32);
-                }
-                let ng = pos.x - radius - camera_transform.translation.x;
-                if ng < 500.0 && ng > 300.0 && !lv_idx_entity_paires.pairs.contains_key(&(i as u32))
-                {
-                    spawn_circle(&mut cmd, pos, *radius, i as u32, &mut lv_idx_entity_paires);
-                }
-            }
-        }
-    }
 }
 
 pub fn game_pause_play(state: Res<State<GameState>>, mut nxt_state: ResMut<NextState<GameState>>) {
