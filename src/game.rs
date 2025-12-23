@@ -9,6 +9,7 @@ fn spawn_floor(
     rect: &Vec4,
     index: u32,
     lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+    asset_server: &Res<AssetServer>,
 ) {
     let hw = FLOOR_H;
     let hy = rect.y + rect.w - hw / 2.0;
@@ -17,7 +18,18 @@ fn spawn_floor(
         &Vec4::new(rect.x, rect.y - hw / 2.0, rect.z, rect.w - hw / 2.0),
         true,
     );
-    let id1 = cmd.spawn(floor_high).id();
+    let id1 = cmd
+        .spawn(floor_high)
+        .insert(Sprite {
+            image: asset_server.load("grass.png"),
+            image_mode: SpriteImageMode::Tiled {
+                tile_x: true,
+                tile_y: false,
+                stretch_value: 1.0,
+            },
+            ..Default::default()
+        })
+        .id();
     let id2 = cmd.spawn(floor_low).id();
 
     lv_idx_entity_paires.pairs.insert(index, (id1, Some(id2)));
@@ -81,6 +93,7 @@ fn spawn_circle(
     radius: f32,
     index: u32,
     lv_idx_entity_paires: &mut ResMut<IdxEntityPair>,
+    _asset_server: &Res<AssetServer>,
 ) {
     let id = cmd
         .spawn(MapItemBundle::circle_double_jump(pos, radius))
@@ -95,13 +108,16 @@ pub fn dynamic_map_item(
     mut cmd: Commands,
     level_data: Res<LevelData>,
     mut lv_idx_entity_paires: ResMut<IdxEntityPair>,
-    _asset_server: Res<AssetServer>,
+    asset_server: Res<AssetServer>,
     camera_transform: Single<&mut Transform, (With<Camera>, Without<RoleSpeed>, Without<MapItem>)>,
 ) {
     let screen_half_x = (WINDOW_RESOLUTION_X / 2) as f32;
 
-    type SpawnRectArgs<'a, 'b, 'c, 'd> =
-        (&'a mut Commands<'b, 'c>, &'a mut ResMut<'d, IdxEntityPair>);
+    type SpawnRectArgs<'a, 'b, 'c, 'd, 'e> = (
+        &'a mut Commands<'b, 'c>,
+        &'a mut ResMut<'d, IdxEntityPair>,
+        &'a Res<'e, AssetServer>,
+    );
 
     for (i, lv_data) in level_data.data.iter().enumerate() {
         let i = i as u32;
@@ -136,7 +152,7 @@ pub fn dynamic_map_item(
             ),
             MapItemData::Floor(rect) => (
                 Box::new(|args: SpawnRectArgs| {
-                    spawn_floor(args.0, rect, i, args.1);
+                    spawn_floor(args.0, rect, i, args.1, args.2);
                 }),
                 rect.x - rect.z,
                 rect.x + rect.z,
@@ -151,7 +167,7 @@ pub fn dynamic_map_item(
 
             MapItemData::DoubleJumpCircle(pos, radius) => (
                 Box::new(|args: SpawnRectArgs| {
-                    spawn_circle(args.0, pos, *radius, i, args.1);
+                    spawn_circle(args.0, pos, *radius, i, args.1, args.2);
                 }),
                 pos.x - radius,
                 pos.x + radius,
@@ -171,7 +187,7 @@ pub fn dynamic_map_item(
         } else {
             let coming_distance = left - camera_transform.translation.x;
             if coming_distance > 0.0 && coming_distance < screen_half_x {
-                spawn_f((&mut cmd, &mut lv_idx_entity_paires));
+                spawn_f((&mut cmd, &mut lv_idx_entity_paires, &asset_server));
             }
         }
     }
